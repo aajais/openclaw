@@ -177,6 +177,39 @@ export async function applyConfig(state: ConfigState) {
   }
 }
 
+export async function patchConfig(
+  state: ConfigState & {
+    configPatching?: boolean;
+    configRawPatch?: string;
+    configRawPatchDirty?: boolean;
+  },
+) {
+  if (!state.client || !state.connected) {
+    return;
+  }
+  state.configPatching = true;
+  state.lastError = null;
+  try {
+    const rawPatch = typeof state.configRawPatch === "string" ? state.configRawPatch : "{}\n";
+    const baseHash = state.configSnapshot?.hash;
+    if (!baseHash) {
+      state.lastError = "Config hash missing; reload and retry.";
+      return;
+    }
+    await state.client.request("config.patch", {
+      rawPatch,
+      baseHash,
+      sessionKey: state.applySessionKey,
+    });
+    state.configRawPatchDirty = false;
+    await loadConfig(state);
+  } catch (err) {
+    state.lastError = String(err);
+  } finally {
+    state.configPatching = false;
+  }
+}
+
 export async function runUpdate(state: ConfigState) {
   if (!state.client || !state.connected) {
     return;
