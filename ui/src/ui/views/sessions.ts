@@ -176,6 +176,20 @@ export function renderSessions(props: SessionsProps) {
               })}
           />
         </label>
+
+        <button
+          class="btn"
+          type="button"
+          @click=${() =>
+            props.onFiltersChange({
+              activeMinutes: "",
+              limit: "5000",
+              includeGlobal: true,
+              includeUnknown: true,
+            })}
+        >
+          Show everything
+        </button>
       </div>
 
       ${

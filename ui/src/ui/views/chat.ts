@@ -34,6 +34,7 @@ export type FallbackIndicatorStatus = {
 export type ChatProps = {
   sessionKey: string;
   onSessionKeyChange: (next: string) => void;
+  sessionBadges?: Record<string, { running: boolean; error: boolean }>;
   thinkingLevel: string | null;
   showThinking: boolean;
   loading: boolean;
@@ -336,39 +337,101 @@ export function renderChat(props: ChatProps) {
           : nothing
       }
 
-      <div
-        class="chat-split-container ${sidebarOpen ? "chat-split-container--open" : ""}"
-      >
-        <div
-          class="chat-main"
-          style="flex: ${sidebarOpen ? `0 0 ${splitRatio * 100}%` : "1 1 100%"}"
-        >
-          ${thread}
-        </div>
+      <div class="chat-layout">
+        <aside class="chat-sessions" aria-label="Chats">
+          <div class="chat-sessions__header">
+            <div class="chat-sessions__title">Chats</div>
+            <button class="btn" type="button" ?disabled=${!props.connected} @click=${props.onNewSession}>
+              New
+            </button>
+          </div>
+          <div class="chat-sessions__list" role="list">
+            ${(() => {
+              const badges = props.sessionBadges ?? {};
+              const fromBackend = props.sessions?.sessions ?? [];
+              const keys = new Set<string>([
+                ...fromBackend.map((row) => row.key),
+                ...Object.keys(badges),
+              ]);
+              if (!keys.has(props.sessionKey)) {
+                keys.add(props.sessionKey);
+              }
+              const ordered = Array.from(keys);
+              ordered.sort((a, b) =>
+                a === props.sessionKey ? -1 : b === props.sessionKey ? 1 : a.localeCompare(b),
+              );
+              return ordered.map((key) => {
+                const row = fromBackend.find((r) => r.key === key);
+                const label = row?.label ? row.label : key;
+                const badge = badges[key];
+                return html`
+                  <button
+                    class="chat-sessions__item ${key === props.sessionKey ? "chat-sessions__item--active" : ""}"
+                    type="button"
+                    role="listitem"
+                    @click=${() => props.onSessionKeyChange(key)}
+                    title=${key}
+                  >
+                    <span class="chat-sessions__label">${label}</span>
+                    <span class="chat-sessions__badges">
+                      ${
+                        badge?.running
+                          ? html`
+                              <span class="chat-sessions__badge chat-sessions__badge--running">running</span>
+                            `
+                          : nothing
+                      }
+                      ${
+                        badge?.error
+                          ? html`
+                              <span class="chat-sessions__badge chat-sessions__badge--error">error</span>
+                            `
+                          : nothing
+                      }
+                    </span>
+                  </button>
+                `;
+              });
+            })()}
+          </div>
+        </aside>
 
-        ${
-          sidebarOpen
-            ? html`
-              <resizable-divider
-                .splitRatio=${splitRatio}
-                @resize=${(e: CustomEvent) => props.onSplitRatioChange?.(e.detail.splitRatio)}
-              ></resizable-divider>
-              <div class="chat-sidebar">
-                ${renderMarkdownSidebar({
-                  content: props.sidebarContent ?? null,
-                  error: props.sidebarError ?? null,
-                  onClose: props.onCloseSidebar!,
-                  onViewRawText: () => {
-                    if (!props.sidebarContent || !props.onOpenSidebar) {
-                      return;
-                    }
-                    props.onOpenSidebar(`\`\`\`\n${props.sidebarContent}\n\`\`\``);
-                  },
-                })}
-              </div>
-            `
-            : nothing
-        }
+        <div class="chat-content">
+          <div
+            class="chat-split-container ${sidebarOpen ? "chat-split-container--open" : ""}"
+          >
+            <div
+              class="chat-main"
+              style="flex: ${sidebarOpen ? `0 0 ${splitRatio * 100}%` : "1 1 100%"}"
+            >
+              ${thread}
+            </div>
+
+            ${
+              sidebarOpen
+                ? html`
+                  <resizable-divider
+                    .splitRatio=${splitRatio}
+                    @resize=${(e: CustomEvent) => props.onSplitRatioChange?.(e.detail.splitRatio)}
+                  ></resizable-divider>
+                  <div class="chat-sidebar">
+                    ${renderMarkdownSidebar({
+                      content: props.sidebarContent ?? null,
+                      error: props.sidebarError ?? null,
+                      onClose: props.onCloseSidebar!,
+                      onViewRawText: () => {
+                        if (!props.sidebarContent || !props.onOpenSidebar) {
+                          return;
+                        }
+                        props.onOpenSidebar(`\`\`\`\n${props.sidebarContent}\n\`\`\``);
+                      },
+                    })}
+                  </div>
+                `
+                : nothing
+            }
+          </div>
+        </div>
       </div>
 
       ${

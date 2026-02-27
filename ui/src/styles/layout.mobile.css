@@ -219,6 +219,27 @@
     padding: 12px 8px;
   }
 
+  .chat-layout {
+    flex-direction: column;
+  }
+
+  .chat-sessions {
+    width: 100%;
+    flex: 0 0 auto;
+  }
+
+  .chat-sessions__list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-height: 140px;
+  }
+
+  .chat-sessions__item {
+    width: auto;
+    flex: 0 0 auto;
+  }
+
   .chat-msg {
     max-width: 90%;
   }

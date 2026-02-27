@@ -222,38 +222,48 @@ export function handleGatewayEvent(host: GatewayHost, evt: GatewayEventFrame) {
 }
 
 function handleTerminalChatEvent(
-  host: GatewayHost,
+  mainHost: GatewayHost,
+  chatHost: unknown,
   payload: ChatEventPayload | undefined,
   state: ReturnType<typeof handleChatEvent>,
 ) {
   if (state !== "final" && state !== "error" && state !== "aborted") {
     return;
   }
-  resetToolStream(host as unknown as Parameters<typeof resetToolStream>[0]);
-  void flushChatQueueForEvent(host as unknown as Parameters<typeof flushChatQueueForEvent>[0]);
+  resetToolStream(chatHost as Parameters<typeof resetToolStream>[0]);
+  void flushChatQueueForEvent(chatHost as Parameters<typeof flushChatQueueForEvent>[0]);
   const runId = payload?.runId;
-  if (!runId || !host.refreshSessionsAfterChat.has(runId)) {
+  const refreshSet = (chatHost as { refreshSessionsAfterChat?: Set<string> })
+    .refreshSessionsAfterChat;
+  if (!runId || !refreshSet?.has(runId)) {
     return;
   }
-  host.refreshSessionsAfterChat.delete(runId);
+  refreshSet.delete(runId);
   if (state === "final") {
-    void loadSessions(host as unknown as OpenClawApp, {
+    void loadSessions(mainHost as unknown as OpenClawApp, {
       activeMinutes: CHAT_SESSIONS_ACTIVE_MINUTES,
     });
   }
 }
 
 function handleChatGatewayEvent(host: GatewayHost, payload: ChatEventPayload | undefined) {
+  const sessionKey = typeof payload?.sessionKey === "string" ? payload.sessionKey : host.sessionKey;
   if (payload?.sessionKey) {
     setLastActiveSessionKey(
       host as unknown as Parameters<typeof setLastActiveSessionKey>[0],
       payload.sessionKey,
     );
   }
-  const state = handleChatEvent(host as unknown as OpenClawApp, payload);
-  handleTerminalChatEvent(host, payload, state);
+
+  const target = (
+    host as unknown as { getChatHostForSession?: (key: string) => unknown }
+  ).getChatHostForSession?.(sessionKey);
+  const chatHost = (target ?? host) as unknown as Parameters<typeof handleChatEvent>[0];
+
+  const state = handleChatEvent(chatHost, payload);
+  handleTerminalChatEvent(host, chatHost, payload, state);
   if (state === "final" && shouldReloadHistoryForFinalEvent(payload)) {
-    void loadChatHistory(host as unknown as OpenClawApp);
+    void loadChatHistory(chatHost as unknown as Parameters<typeof loadChatHistory>[0]);
   }
 }
 
@@ -270,15 +280,25 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
     if (host.onboarding) {
       return;
     }
+    const payload = evt.payload as AgentEventPayload | undefined;
+    const sessionKey =
+      typeof payload?.sessionKey === "string" ? payload.sessionKey : host.sessionKey;
+    const target = (
+      host as unknown as { getChatHostForSession?: (key: string) => unknown }
+    ).getChatHostForSession?.(sessionKey);
     handleAgentEvent(
-      host as unknown as Parameters<typeof handleAgentEvent>[0],
-      evt.payload as AgentEventPayload | undefined,
+      (target ?? host) as unknown as Parameters<typeof handleAgentEvent>[0],
+      payload,
     );
+    (host as unknown as { updateChatBadges?: () => void }).updateChatBadges?.();
+    (host as unknown as { persistActiveChatToStore?: () => void }).persistActiveChatToStore?.();
     return;
   }
 
   if (evt.event === "chat") {
     handleChatGatewayEvent(host, evt.payload as ChatEventPayload | undefined);
+    (host as unknown as { updateChatBadges?: () => void }).updateChatBadges?.();
+    (host as unknown as { persistActiveChatToStore?: () => void }).persistActiveChatToStore?.();
     return;
   }
 

@@ -14,6 +14,7 @@ import { loadChatHistory } from "./controllers/chat.ts";
 import {
   applyConfig,
   loadConfig,
+  patchConfig,
   runUpdate,
   saveConfig,
   updateConfigFormValue,
@@ -976,23 +977,18 @@ export function renderApp(state: AppViewState) {
             ? renderChat({
                 sessionKey: state.sessionKey,
                 onSessionKeyChange: (next) => {
-                  state.sessionKey = next;
-                  state.chatMessage = "";
-                  state.chatAttachments = [];
-                  state.chatStream = null;
-                  state.chatStreamStartedAt = null;
-                  state.chatRunId = null;
-                  state.chatQueue = [];
-                  state.resetToolStream();
-                  state.resetChatScroll();
-                  state.applySettings({
-                    ...state.settings,
-                    sessionKey: next,
-                    lastActiveSessionKey: next,
-                  });
+                  state.switchChatSession(next);
                   void state.loadAssistantIdentity();
-                  void loadChatHistory(state);
-                  void refreshChatAvatar(state);
+                  void loadChatHistory(state).finally(() =>
+                    (
+                      state as unknown as { persistActiveChatToStore?: () => void }
+                    ).persistActiveChatToStore?.(),
+                  );
+                  void refreshChatAvatar(state).finally(() =>
+                    (
+                      state as unknown as { persistActiveChatToStore?: () => void }
+                    ).persistActiveChatToStore?.(),
+                  );
                 },
                 thinkingLevel: state.chatThinkingLevel,
                 showThinking,
@@ -1012,6 +1008,7 @@ export function renderApp(state: AppViewState) {
                 disabledReason: chatDisabledReason,
                 error: state.lastError,
                 sessions: state.sessionsResult,
+                sessionBadges: state.chatSessionBadges,
                 focusMode: chatFocus,
                 onRefresh: () => {
                   state.resetToolStream();
@@ -1027,14 +1024,28 @@ export function renderApp(state: AppViewState) {
                   });
                 },
                 onChatScroll: (event) => state.handleChatScroll(event),
-                onDraftChange: (next) => (state.chatMessage = next),
+                onDraftChange: (next) => state.updateChatDraft(next),
                 attachments: state.chatAttachments,
-                onAttachmentsChange: (next) => (state.chatAttachments = next),
+                onAttachmentsChange: (next) => state.updateChatAttachments(next),
                 onSend: () => state.handleSendChat(),
                 canAbort: Boolean(state.chatRunId),
                 onAbort: () => void state.handleAbortChat(),
                 onQueueRemove: (id) => state.removeQueuedMessage(id),
-                onNewSession: () => state.handleSendChat("/new", { restoreDraft: true }),
+                onNewSession: () => {
+                  const nextKey = state.newChatSessionKey();
+                  state.switchChatSession(nextKey);
+                  void state.loadAssistantIdentity();
+                  void loadChatHistory(state).finally(() =>
+                    (
+                      state as unknown as { persistActiveChatToStore?: () => void }
+                    ).persistActiveChatToStore?.(),
+                  );
+                  void refreshChatAvatar(state).finally(() =>
+                    (
+                      state as unknown as { persistActiveChatToStore?: () => void }
+                    ).persistActiveChatToStore?.(),
+                  );
+                },
                 showNewMessages: state.chatNewMessagesBelow && !state.chatManualRefreshInFlight,
                 onScrollToBottom: () => state.scrollToBottom(),
                 // Sidebar props for tool output viewing
@@ -1056,11 +1067,15 @@ export function renderApp(state: AppViewState) {
             ? renderConfig({
                 raw: state.configRaw,
                 originalRaw: state.configRawOriginal,
+                rawMode: state.configRawMode,
+                rawPatch: state.configRawPatch,
+                rawPatchDirty: state.configRawPatchDirty,
                 valid: state.configValid,
                 issues: state.configIssues,
                 loading: state.configLoading,
                 saving: state.configSaving,
                 applying: state.configApplying,
+                patching: state.configPatching,
                 updating: state.updateRunning,
                 connected: state.connected,
                 schema: state.configSchema,
@@ -1075,6 +1090,20 @@ export function renderApp(state: AppViewState) {
                 onRawChange: (next) => {
                   state.configRaw = next;
                 },
+                onRawModeChange: (mode) => {
+                  state.configRawMode = mode;
+                },
+                onRawPatchChange: (next) => {
+                  state.configRawPatch = next;
+                  state.configRawPatchDirty = next.trim() !== "{}";
+                },
+                onRawReset: () => {
+                  state.configRaw = state.configRawOriginal;
+                },
+                onRawPatchReset: () => {
+                  state.configRawPatch = "{}\n";
+                  state.configRawPatchDirty = false;
+                },
                 onFormModeChange: (mode) => (state.configFormMode = mode),
                 onFormPatch: (path, value) => updateConfigFormValue(state, path, value),
                 onSearchChange: (query) => (state.configSearchQuery = query),
@@ -1086,6 +1115,7 @@ export function renderApp(state: AppViewState) {
                 onReload: () => loadConfig(state),
                 onSave: () => saveConfig(state),
                 onApply: () => applyConfig(state),
+                onPatchApply: () => patchConfig(state),
                 onUpdate: () => runUpdate(state),
               })
             : nothing

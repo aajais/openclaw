@@ -94,6 +94,35 @@ declare global {
 
 const bootAssistantIdentity = normalizeAssistantIdentity({});
 
+type ChatSessionStore = {
+  sessionKey: string;
+  chatLoading: boolean;
+  chatSending: boolean;
+  chatMessage: string;
+  chatAttachments: ChatAttachment[];
+  chatQueue: ChatQueueItem[];
+  chatRunId: string | null;
+  chatStream: string | null;
+  chatStreamStartedAt: number | null;
+  chatMessages: unknown[];
+  chatToolMessages: unknown[];
+  chatThinkingLevel: string | null;
+  chatAvatarUrl: string | null;
+  lastError: string | null;
+  compactionStatus: CompactionStatus | null;
+  compactionClearTimer: number | null;
+  fallbackStatus: FallbackStatus | null;
+  fallbackClearTimer: number | null;
+  toolStreamById: Map<string, ToolStreamEntry>;
+  toolStreamOrder: string[];
+  toolStreamSyncTimer: number | null;
+  client: GatewayBrowserClient | null;
+  connected: boolean;
+  basePath: string;
+  hello: GatewayHelloOk | null;
+  refreshSessionsAfterChat: Set<string>;
+};
+
 function resolveOnboardingMode(): boolean {
   if (!window.location.search) {
     return false;
@@ -129,7 +158,7 @@ export class OpenClawApp extends LitElement {
   @state() lastErrorCode: string | null = null;
   @state() eventLog: EventLogEntry[] = [];
   private eventLogBuffer: EventLogEntry[] = [];
-  private toolStreamSyncTimer: number | null = null;
+  // toolStreamSyncTimer is stored per-chat session (see toolStreamSyncTimer below).
   private sidebarCloseTimer: number | null = null;
 
   @state() assistantName = bootAssistantIdentity.name;
@@ -137,6 +166,8 @@ export class OpenClawApp extends LitElement {
   @state() assistantAgentId = bootAssistantIdentity.agentId ?? null;
 
   @state() sessionKey = this.settings.sessionKey;
+
+  // Chat state is stored per-session to support concurrent runs.
   @state() chatLoading = false;
   @state() chatSending = false;
   @state() chatMessage = "";
@@ -152,6 +183,7 @@ export class OpenClawApp extends LitElement {
   @state() chatQueue: ChatQueueItem[] = [];
   @state() chatAttachments: ChatAttachment[] = [];
   @state() chatManualRefreshInFlight = false;
+  @state() chatSessionBadges: Record<string, { running: boolean; error: boolean }> = {};
   // Sidebar state for tool output viewing
   @state() sidebarOpen = false;
   @state() sidebarContent: string | null = null;
@@ -183,6 +215,7 @@ export class OpenClawApp extends LitElement {
   @state() configIssues: unknown[] = [];
   @state() configSaving = false;
   @state() configApplying = false;
+  @state() configPatching = false;
   @state() updateRunning = false;
   @state() applySessionKey = this.settings.lastActiveSessionKey;
   @state() configSnapshot: ConfigSnapshot | null = null;
@@ -194,6 +227,9 @@ export class OpenClawApp extends LitElement {
   @state() configFormOriginal: Record<string, unknown> | null = null;
   @state() configFormDirty = false;
   @state() configFormMode: "form" | "raw" = "form";
+  @state() configRawMode: "full" | "patch" = "patch";
+  @state() configRawPatch = "{}\n";
+  @state() configRawPatchDirty = false;
   @state() configSearchQuery = "";
   @state() configActiveSection: string | null = null;
   @state() configActiveSubsection: string | null = null;
@@ -379,8 +415,14 @@ export class OpenClawApp extends LitElement {
   private logsPollInterval: number | null = null;
   private debugPollInterval: number | null = null;
   private logsScrollFrame: number | null = null;
+
+  private chatSessions = new Map<string, ChatSessionStore>();
+
+  // Active-session tool stream pointers (swapped on session switch).
   private toolStreamById = new Map<string, ToolStreamEntry>();
   private toolStreamOrder: string[] = [];
+  toolStreamSyncTimer: number | null = null;
+
   refreshSessionsAfterChat = new Set<string>();
   basePath = "";
   private popStateHandler = () =>
@@ -476,6 +518,8 @@ export class OpenClawApp extends LitElement {
 
   async handleAbortChat() {
     await handleAbortChatInternal(this as unknown as Parameters<typeof handleAbortChatInternal>[0]);
+    this.persistActiveChatToStore();
+    this.updateChatBadges();
   }
 
   removeQueuedMessage(id: string) {
@@ -483,6 +527,8 @@ export class OpenClawApp extends LitElement {
       this as unknown as Parameters<typeof removeQueuedMessageInternal>[0],
       id,
     );
+    this.persistActiveChatToStore();
+    this.updateChatBadges();
   }
 
   async handleSendChat(
@@ -494,6 +540,8 @@ export class OpenClawApp extends LitElement {
       messageOverride,
       opts,
     );
+    this.persistActiveChatToStore();
+    this.updateChatBadges();
   }
 
   async handleWhatsAppStart(force: boolean) {
@@ -608,6 +656,145 @@ export class OpenClawApp extends LitElement {
     const newRatio = Math.max(0.4, Math.min(0.7, ratio));
     this.splitRatio = newRatio;
     this.applySettings({ ...this.settings, splitRatio: newRatio });
+  }
+
+  private ensureChatSessionStore(key: string): ChatSessionStore {
+    const existing = this.chatSessions.get(key);
+    if (existing) {
+      existing.client = this.client;
+      existing.connected = this.connected;
+      existing.basePath = this.basePath;
+      existing.hello = this.hello;
+      existing.refreshSessionsAfterChat = this.refreshSessionsAfterChat;
+      return existing;
+    }
+    const created: ChatSessionStore = {
+      sessionKey: key,
+      chatLoading: false,
+      chatSending: false,
+      chatMessage: "",
+      chatAttachments: [],
+      chatQueue: [],
+      chatRunId: null,
+      chatStream: null,
+      chatStreamStartedAt: null,
+      chatMessages: [],
+      chatToolMessages: [],
+      chatThinkingLevel: null,
+      chatAvatarUrl: null,
+      lastError: null,
+      compactionStatus: null,
+      compactionClearTimer: null,
+      fallbackStatus: null,
+      fallbackClearTimer: null,
+      toolStreamById: new Map(),
+      toolStreamOrder: [],
+      toolStreamSyncTimer: null,
+      client: this.client,
+      connected: this.connected,
+      basePath: this.basePath,
+      hello: this.hello,
+      refreshSessionsAfterChat: this.refreshSessionsAfterChat,
+    };
+    this.chatSessions.set(key, created);
+    return created;
+  }
+
+  private persistActiveChatToStore() {
+    const store = this.ensureChatSessionStore(this.sessionKey);
+    store.chatLoading = this.chatLoading;
+    store.chatSending = this.chatSending;
+    store.chatMessage = this.chatMessage;
+    store.chatAttachments = this.chatAttachments;
+    store.chatQueue = this.chatQueue;
+    store.chatRunId = this.chatRunId;
+    store.chatStream = this.chatStream;
+    store.chatStreamStartedAt = this.chatStreamStartedAt;
+    store.chatMessages = this.chatMessages;
+    store.chatToolMessages = this.chatToolMessages;
+    store.chatThinkingLevel = this.chatThinkingLevel;
+    store.chatAvatarUrl = this.chatAvatarUrl;
+    store.lastError = this.lastError;
+    store.compactionStatus = this.compactionStatus;
+    store.fallbackStatus = this.fallbackStatus;
+    store.toolStreamById = this.toolStreamById;
+    store.toolStreamOrder = this.toolStreamOrder;
+    store.toolStreamSyncTimer = this.toolStreamSyncTimer;
+  }
+
+  private loadActiveChatFromStore(key: string) {
+    const store = this.ensureChatSessionStore(key);
+    this.chatLoading = store.chatLoading;
+    this.chatSending = store.chatSending;
+    this.chatMessage = store.chatMessage;
+    this.chatAttachments = store.chatAttachments;
+    this.chatQueue = store.chatQueue;
+    this.chatRunId = store.chatRunId;
+    this.chatStream = store.chatStream;
+    this.chatStreamStartedAt = store.chatStreamStartedAt;
+    this.chatMessages = store.chatMessages;
+    this.chatToolMessages = store.chatToolMessages;
+    this.chatThinkingLevel = store.chatThinkingLevel;
+    this.chatAvatarUrl = store.chatAvatarUrl;
+    this.lastError = store.lastError;
+    this.compactionStatus = store.compactionStatus;
+    this.fallbackStatus = store.fallbackStatus;
+    this.toolStreamById = store.toolStreamById;
+    this.toolStreamOrder = store.toolStreamOrder;
+    this.toolStreamSyncTimer = store.toolStreamSyncTimer;
+  }
+
+  updateChatDraft(next: string) {
+    this.chatMessage = next;
+    const store = this.ensureChatSessionStore(this.sessionKey);
+    store.chatMessage = next;
+  }
+
+  updateChatAttachments(next: ChatAttachment[]) {
+    this.chatAttachments = next;
+    const store = this.ensureChatSessionStore(this.sessionKey);
+    store.chatAttachments = next;
+  }
+
+  switchChatSession(next: string) {
+    if (!next || next === this.sessionKey) {
+      return;
+    }
+    this.persistActiveChatToStore();
+    this.sessionKey = next;
+    this.loadActiveChatFromStore(next);
+    this.resetChatScroll();
+    this.applySettings({
+      ...this.settings,
+      sessionKey: next,
+      lastActiveSessionKey: next,
+    });
+    this.updateChatBadges();
+  }
+
+  newChatSessionKey(): string {
+    // Short, URL-safe session keys.
+    return `chat-${generateUUID().slice(0, 8)}`;
+  }
+
+  updateChatBadges() {
+    const badges: Record<string, { running: boolean; error: boolean }> = {};
+    for (const [key, store] of this.chatSessions.entries()) {
+      const running = Boolean(store.chatRunId || store.chatSending || store.chatStream != null);
+      const error = Boolean(store.lastError);
+      badges[key] = { running, error };
+    }
+    // Ensure the active session is always represented.
+    const activeRunning = Boolean(this.chatRunId || this.chatSending || this.chatStream != null);
+    badges[this.sessionKey] = { running: activeRunning, error: Boolean(this.lastError) };
+    this.chatSessionBadges = badges;
+  }
+
+  getChatHostForSession(key: string): OpenClawApp | ChatSessionStore {
+    if (key === this.sessionKey) {
+      return this;
+    }
+    return this.ensureChatSessionStore(key);
   }
 
   render() {
