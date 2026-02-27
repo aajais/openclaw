@@ -35,6 +35,7 @@ export type ChatProps = {
   sessionKey: string;
   onSessionKeyChange: (next: string) => void;
   sessionBadges?: Record<string, { running: boolean; error: boolean }>;
+  onAbortSession?: (sessionKey: string) => void;
   thinkingLevel: string | null;
   showThinking: boolean;
   loading: boolean;
@@ -378,6 +379,23 @@ export function renderChat(props: ChatProps) {
                         badge?.running
                           ? html`
                               <span class="chat-sessions__badge chat-sessions__badge--running">running</span>
+                              ${
+                                props.onAbortSession
+                                  ? html`
+                                      <button
+                                        type="button"
+                                        class="chat-sessions__stop"
+                                        title="Stop"
+                                        @click=${(e: Event) => {
+                                          e.stopPropagation();
+                                          props.onAbortSession?.(key);
+                                        }}
+                                      >
+                                        Stop
+                                      </button>
+                                    `
+                                  : nothing
+                              }
                             `
                           : nothing
                       }

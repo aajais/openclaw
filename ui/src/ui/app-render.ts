@@ -1009,6 +1009,7 @@ export function renderApp(state: AppViewState) {
                 error: state.lastError,
                 sessions: state.sessionsResult,
                 sessionBadges: state.chatSessionBadges,
+                onAbortSession: (key) => void state.abortChatSession(key),
                 focusMode: chatFocus,
                 onRefresh: () => {
                   state.resetToolStream();

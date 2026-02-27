@@ -53,6 +53,7 @@ import {
 import type { AppViewState } from "./app-view-state.ts";
 import { normalizeAssistantIdentity } from "./assistant-identity.ts";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
+import { abortChatRun } from "./controllers/chat.ts";
 import type { CronFieldErrors } from "./controllers/cron.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
@@ -772,6 +773,21 @@ export class OpenClawApp extends LitElement {
     this.updateChatBadges();
   }
 
+  async abortChatSession(key: string) {
+    const host = this.getChatHostForSession(key) as unknown as Parameters<typeof abortChatRun>[0];
+    if (!host.connected) {
+      return;
+    }
+    await abortChatRun(host);
+    // If abort succeeds, the gateway should emit an aborted/final event, but be defensive.
+    (host as unknown as { chatRunId: string | null }).chatRunId = null;
+    (host as unknown as { chatStream: string | null }).chatStream = null;
+    (host as unknown as { chatStreamStartedAt: number | null }).chatStreamStartedAt = null;
+    (host as unknown as { chatSending: boolean }).chatSending = false;
+    (host as unknown as { updateChatBadges?: () => void }).updateChatBadges?.();
+    this.updateChatBadges();
+  }
+
   newChatSessionKey(): string {
     // Short, URL-safe session keys.
     return `chat-${generateUUID().slice(0, 8)}`;
@@ -780,12 +796,12 @@ export class OpenClawApp extends LitElement {
   updateChatBadges() {
     const badges: Record<string, { running: boolean; error: boolean }> = {};
     for (const [key, store] of this.chatSessions.entries()) {
-      const running = Boolean(store.chatRunId || store.chatSending || store.chatStream != null);
+      const running = Boolean(store.chatRunId || store.chatSending);
       const error = Boolean(store.lastError);
       badges[key] = { running, error };
     }
     // Ensure the active session is always represented.
-    const activeRunning = Boolean(this.chatRunId || this.chatSending || this.chatStream != null);
+    const activeRunning = Boolean(this.chatRunId || this.chatSending);
     badges[this.sessionKey] = { running: activeRunning, error: Boolean(this.lastError) };
     this.chatSessionBadges = badges;
   }

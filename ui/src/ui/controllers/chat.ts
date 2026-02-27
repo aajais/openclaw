@@ -240,6 +240,14 @@ export function handleChatEvent(state: ChatState, payload?: ChatEventPayload) {
   }
 
   if (payload.state === "delta") {
+    // When observing a run started elsewhere (another tab/client), we may see deltas before
+    // this UI has a local chatRunId. Capture runId so we can show accurate running state and abort.
+    if (payload.runId && !state.chatRunId) {
+      state.chatRunId = payload.runId;
+    }
+    if (!state.chatStreamStartedAt) {
+      state.chatStreamStartedAt = Date.now();
+    }
     const next = extractText(payload.message);
     if (typeof next === "string") {
       const current = state.chatStream ?? "";
