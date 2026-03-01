@@ -350,6 +350,7 @@ export function renderChat(props: ChatProps) {
             ${(() => {
               const badges = props.sessionBadges ?? {};
               const fromBackend = props.sessions?.sessions ?? [];
+              const rowsByKey = new Map(fromBackend.map((row) => [row.key, row] as const));
               const keys = new Set<string>([
                 ...fromBackend.map((row) => row.key),
                 ...Object.keys(badges),
@@ -358,11 +359,29 @@ export function renderChat(props: ChatProps) {
                 keys.add(props.sessionKey);
               }
               const ordered = Array.from(keys);
-              ordered.sort((a, b) =>
-                a === props.sessionKey ? -1 : b === props.sessionKey ? 1 : a.localeCompare(b),
-              );
+              ordered.sort((a, b) => {
+                if (a === props.sessionKey) {
+                  return -1;
+                }
+                if (b === props.sessionKey) {
+                  return 1;
+                }
+                const aRow = rowsByKey.get(a);
+                const bRow = rowsByKey.get(b);
+                const aCreated = aRow?.createdAt ?? null;
+                const bCreated = bRow?.createdAt ?? null;
+                if (typeof aCreated === "number" && typeof bCreated === "number") {
+                  return bCreated - aCreated; // newest first
+                }
+                const aUpdated = aRow?.updatedAt ?? null;
+                const bUpdated = bRow?.updatedAt ?? null;
+                if (typeof aUpdated === "number" && typeof bUpdated === "number") {
+                  return bUpdated - aUpdated;
+                }
+                return a.localeCompare(b);
+              });
               return ordered.map((key) => {
-                const row = fromBackend.find((r) => r.key === key);
+                const row = rowsByKey.get(key);
                 const label = row?.label ? row.label : key;
                 const badge = badges[key];
                 return html`
@@ -539,13 +558,15 @@ export function renderChat(props: ChatProps) {
             ></textarea>
           </label>
           <div class="chat-compose__actions">
-            <button
-              class="btn"
-              ?disabled=${!props.connected || (!canAbort && props.sending)}
-              @click=${canAbort ? props.onAbort : props.onNewSession}
-            >
-              ${canAbort ? "Stop" : "New session"}
-            </button>
+            ${
+              canAbort
+                ? html`
+                  <button class="btn" ?disabled=${!props.connected} @click=${props.onAbort}>
+                    Stop
+                  </button>
+                `
+                : nothing
+            }
             <button
               class="btn primary"
               ?disabled=${!props.connected}

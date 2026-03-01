@@ -360,7 +360,7 @@ export function createDiagnosticsOtelService(): OpenClawPluginService {
 
       const spanWithDuration = (
         name: string,
-        attributes: Record<string, string | number>,
+        attributes: Record<string, string | number | boolean>,
         durationMs?: number,
       ) => {
         const startTime =
@@ -532,7 +532,9 @@ export function createDiagnosticsOtelService(): OpenClawPluginService {
         if (!tracesEnabled) {
           return;
         }
-        const spanAttrs: Record<string, string | number> = { ...attrs };
+
+        // 1) Keep the raw diagnostic span.
+        const spanAttrs: Record<string, string | number | boolean> = { ...attrs };
         addSessionIdentityAttrs(spanAttrs, evt);
         if (evt.chatId !== undefined) {
           spanAttrs["openclaw.chatId"] = String(evt.chatId);
@@ -548,6 +550,49 @@ export function createDiagnosticsOtelService(): OpenClawPluginService {
           span.setStatus({ code: SpanStatusCode.ERROR, message: redactSensitiveText(evt.error) });
         }
         span.end();
+
+        // 2) Emit a turn-like span that Weave can group into threads.
+        // We want: 1 thread per OpenClaw sessionKey.
+        if (!evt.sessionKey) {
+          return;
+        }
+
+        const truncate = (value: string, max: number) =>
+          value.length > max ? `${value.slice(0, Math.max(0, max - 1))}…` : value;
+
+        const inputText = typeof evt.inputText === "string" ? redactSensitiveText(evt.inputText) : "";
+        const outputText =
+          typeof evt.outputText === "string" ? redactSensitiveText(evt.outputText) : "";
+
+        const threadId = evt.sessionKey;
+        const displayName = inputText.trim() ? truncate(inputText.trim(), 120) : "message";
+
+        const turnAttrs: Record<string, string | number | boolean> = {
+          "wandb.thread_id": threadId,
+          "wandb.is_turn": true,
+          "wandb.display_name": displayName,
+          // Weave attribute mappings (OpenInference-style) so it can render previews.
+          "input.value": inputText,
+          "output.value": outputText,
+          // Helpful extras
+          "openclaw.channel": evt.channel ?? "unknown",
+          "openclaw.sessionKey": evt.sessionKey,
+        };
+        if (evt.sessionId) {
+          turnAttrs["openclaw.sessionId"] = evt.sessionId;
+        }
+        if (evt.chatId !== undefined) {
+          turnAttrs["openclaw.chatId"] = String(evt.chatId);
+        }
+        if (evt.messageId !== undefined) {
+          turnAttrs["openclaw.messageId"] = String(evt.messageId);
+        }
+
+        const turnSpan = spanWithDuration("openclaw.message", turnAttrs, evt.durationMs);
+        if (evt.outcome === "error") {
+          turnSpan.setStatus({ code: SpanStatusCode.ERROR, message: "message error" });
+        }
+        turnSpan.end();
       };
 
       const recordLaneEnqueue = (

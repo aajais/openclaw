@@ -17,6 +17,7 @@ import {
   patchConfig,
   runUpdate,
   saveConfig,
+  syncConfigFormFromRaw,
   updateConfigFormValue,
   removeConfigFormValue,
 } from "./controllers/config.ts";
@@ -1036,6 +1037,11 @@ export function renderApp(state: AppViewState) {
                   const nextKey = state.newChatSessionKey();
                   state.switchChatSession(nextKey);
                   void state.loadAssistantIdentity();
+
+                  // Preserve prior UX: starting a new chat automatically sends /new
+                  // so the assistant responds with the session startup flow.
+                  void state.handleSendChat("/new");
+
                   void loadChatHistory(state).finally(() =>
                     (
                       state as unknown as { persistActiveChatToStore?: () => void }
@@ -1105,7 +1111,13 @@ export function renderApp(state: AppViewState) {
                   state.configRawPatch = "{}\n";
                   state.configRawPatchDirty = false;
                 },
-                onFormModeChange: (mode) => (state.configFormMode = mode),
+                onFormModeChange: (mode) => {
+                  state.configFormMode = mode;
+                  if (mode === "form") {
+                    // If the user edited Raw JSON5, try to reflect it back into the form model.
+                    syncConfigFormFromRaw(state);
+                  }
+                },
                 onFormPatch: (path, value) => updateConfigFormValue(state, path, value),
                 onSearchChange: (query) => (state.configSearchQuery = query),
                 onSectionChange: (section) => {

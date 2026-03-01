@@ -299,6 +299,43 @@ type TranscriptMessage = {
   provenance?: unknown;
 };
 
+export function readSessionCreatedAtMs(
+  sessionId: string,
+  storePath: string | undefined,
+  sessionFile?: string,
+  agentId?: string,
+): number | null {
+  const candidates = resolveSessionTranscriptCandidates(sessionId, storePath, sessionFile, agentId);
+  const filePath = candidates.find((p) => fs.existsSync(p));
+  if (!filePath) {
+    return null;
+  }
+  try {
+    const fd = fs.openSync(filePath, "r");
+    try {
+      const chunk = readTranscriptHeadChunk(fd);
+      if (!chunk) {
+        return null;
+      }
+      const firstLineEnd = chunk.indexOf("\n");
+      const firstLine = (firstLineEnd >= 0 ? chunk.slice(0, firstLineEnd) : chunk).trim();
+      if (!firstLine) {
+        return null;
+      }
+      const parsed = JSON.parse(firstLine) as { type?: string; timestamp?: string };
+      if (parsed?.type === "session" && typeof parsed.timestamp === "string") {
+        const ts = Date.parse(parsed.timestamp);
+        return Number.isFinite(ts) ? ts : null;
+      }
+      return null;
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
+}
+
 export function readSessionTitleFieldsFromTranscript(
   sessionId: string,
   storePath: string | undefined,

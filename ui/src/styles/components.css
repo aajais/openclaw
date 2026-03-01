@@ -1629,6 +1629,15 @@
   background: transparent;
 }
 
+/* Ultrawide readability: constrain line length and center the thread */
+@media (min-width: 1536px) {
+  .chat-thread {
+    max-width: 48rem; /* ~768px */
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
 .chat-layout {
   display: flex;
   gap: 12px;
@@ -1834,6 +1843,10 @@
   border-radius: var(--radius-lg);
   padding: 10px 14px;
   min-width: 0;
+
+  /* Prevent long URLs/ids/code strings from causing horizontal overflow. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 :root[data-theme="light"] .chat-bubble {
@@ -2129,6 +2142,8 @@
   z-index: 5;
   margin-top: 0;
   padding-top: 12px;
+  /* iOS: keep the composer comfortably above the Home Indicator. */
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   background: linear-gradient(180deg, transparent 0%, var(--bg) 40%);
 }
 

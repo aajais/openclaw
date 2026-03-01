@@ -754,6 +754,13 @@
   gap: 6px;
 }
 
+.cfg-field--configured {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in oklab, var(--border) 70%, var(--accent) 30%);
+  background: color-mix(in oklab, var(--bg-elevated) 80%, var(--accent) 20%);
+}
+
 .cfg-field--error {
   padding: 14px;
   border-radius: var(--radius-md);
@@ -1042,6 +1049,11 @@
   transition:
     background var(--duration-fast) ease,
     border-color var(--duration-fast) ease;
+}
+
+.cfg-toggle-row--configured {
+  border-color: color-mix(in oklab, var(--border) 60%, var(--accent) 40%);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 18%, transparent);
 }
 
 .cfg-toggle-row:hover:not(.disabled) {

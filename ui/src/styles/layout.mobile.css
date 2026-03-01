@@ -223,21 +223,106 @@
     flex-direction: column;
   }
 
+  /*
+   * Chat sessions: iPhone/iPad small widths
+   * Keep Chats visible on all screens by turning the sidebar into a horizontal rail.
+   * - Left side: sticky/pinned header w/ New button
+   * - Right side: horizontally scrollable chat pills
+   */
   .chat-sessions {
     width: 100%;
     flex: 0 0 auto;
+
+    /* Ensure it never disappears on mobile (debug-safe override). */
+    display: grid !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-height: 56px;
+
+    /* Keep the chats rail visible while scrolling the thread on mobile. */
+    position: sticky;
+    top: 0;
+    z-index: 6;
+
+    /* Rail layout */
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+
+    /* Ensure it reads as a distinct bar on iOS */
+    background: var(--card);
+    box-shadow: 0 1px 0 var(--border);
+  }
+
+  .chat-sessions__header {
+    /* Pin this area; it should not scroll away with the rail */
+    position: sticky;
+    left: 0;
+    z-index: 2;
+
+    /* Make the header compact: New button is the primary control */
+    gap: 8px;
+    padding-right: 6px;
+
+    /* Ensure it visually sits above the scrolling pills */
+    background: var(--card);
+  }
+
+  .chat-sessions__title {
+    display: none;
+  }
+
+  .chat-sessions__header .btn {
+    /* iOS HIG: 44px minimum touch target */
+    min-height: 44px;
+    padding: 10px 14px;
+    border-radius: 999px;
+    white-space: nowrap;
   }
 
   .chat-sessions__list {
+    /* Horizontal rail */
+    display: flex;
     flex-direction: row;
-    flex-wrap: wrap;
-    gap: 8px;
-    max-height: 140px;
+    flex-wrap: nowrap;
+    gap: 10px;
+    align-items: center;
+
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-height: none;
+
+    /* Momentum scroll on iOS */
+    -webkit-overflow-scrolling: touch;
+
+    /* Hide scrollbar (WebKit/iOS + Firefox + old Edge/IE) */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .chat-sessions__list::-webkit-scrollbar {
+    display: none;
   }
 
   .chat-sessions__item {
     width: auto;
     flex: 0 0 auto;
+
+    /* Pill ergonomics */
+    min-height: 44px;
+    padding: 10px 14px;
+    border-radius: 999px;
+
+    /* Prevent one long chat label from consuming the whole rail */
+    max-width: min(240px, 70vw);
+    overflow: hidden;
+  }
+
+  .chat-sessions__label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .chat-msg {

@@ -203,7 +203,7 @@ describe("chat view", () => {
     expect(container.textContent).not.toContain("New session");
   });
 
-  it("shows a new session button when aborting is unavailable", () => {
+  it("does not show a compose-level new session button when aborting is unavailable (use sidebar New)", () => {
     const container = document.createElement("div");
     const onNewSession = vi.fn();
     render(
@@ -216,12 +216,14 @@ describe("chat view", () => {
       container,
     );
 
-    const newSessionButton = Array.from(container.querySelectorAll("button")).find(
-      (btn) => btn.textContent?.trim() === "New session",
-    );
-    expect(newSessionButton).not.toBeUndefined();
-    newSessionButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(onNewSession).toHaveBeenCalledTimes(1);
+    expect(container.textContent).not.toContain("New session");
     expect(container.textContent).not.toContain("Stop");
+
+    const sidebarNewButton = Array.from(container.querySelectorAll("button")).find(
+      (btn) => btn.textContent?.trim() === "New",
+    );
+    expect(sidebarNewButton).not.toBeUndefined();
+    sidebarNewButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onNewSession).toHaveBeenCalledTimes(1);
   });
 });

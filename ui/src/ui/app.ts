@@ -1,5 +1,6 @@
 import { LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
+import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
 import { i18n, I18nController, isSupportedLocale } from "../i18n/index.ts";
 import {
   handleChannelConfigReload as handleChannelConfigReloadInternal,
@@ -789,8 +790,18 @@ export class OpenClawApp extends LitElement {
   }
 
   newChatSessionKey(): string {
+    // Use canonical agent-scoped session keys so that:
+    // - history survives switching sessions (backend stores under agent:<id>:...)
+    // - sidebar/session lists round-trip the same key
+    const parsed = parseAgentSessionKey(this.sessionKey);
+    const agentId = parsed?.agentId ||
+      (
+        (this.hello?.snapshot as { sessionDefaults?: { defaultAgentId?: string } } | undefined)
+          ?.sessionDefaults?.defaultAgentId?.trim() ||
+        "main"
+      );
     // Short, URL-safe session keys.
-    return `chat-${generateUUID().slice(0, 8)}`;
+    return `agent:${agentId}:chat-${generateUUID().slice(0, 8)}`;
   }
 
   updateChatBadges() {

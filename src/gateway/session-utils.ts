@@ -38,7 +38,7 @@ import {
   resolveAvatarMime,
 } from "../shared/avatar-policy.js";
 import { normalizeSessionDeliveryFields } from "../utils/delivery-context.js";
-import { readSessionTitleFieldsFromTranscript } from "./session-utils.fs.js";
+import { readSessionCreatedAtMs, readSessionTitleFieldsFromTranscript } from "./session-utils.fs.js";
 import type {
   GatewayAgentRow,
   GatewaySessionRow,
@@ -52,6 +52,7 @@ export {
   capArrayByJsonBytes,
   readFirstUserMessageFromTranscript,
   readLastMessagePreviewFromTranscript,
+  readSessionCreatedAtMs,
   readSessionTitleFieldsFromTranscript,
   readSessionPreviewItemsFromTranscript,
   readSessionMessages,
@@ -876,11 +877,13 @@ export function listSessionsFromStore(params: {
     const { entry, ...rest } = s;
     let derivedTitle: string | undefined;
     let lastMessagePreview: string | undefined;
+    let createdAt: number | null = null;
     if (entry?.sessionId) {
+      const parsed = parseAgentSessionKey(s.key);
+      const agentId =
+        parsed && parsed.agentId ? normalizeAgentId(parsed.agentId) : resolveDefaultAgentId(cfg);
+      createdAt = readSessionCreatedAtMs(entry.sessionId, storePath, entry.sessionFile, agentId);
       if (includeDerivedTitles || includeLastMessage) {
-        const parsed = parseAgentSessionKey(s.key);
-        const agentId =
-          parsed && parsed.agentId ? normalizeAgentId(parsed.agentId) : resolveDefaultAgentId(cfg);
         const fields = readSessionTitleFieldsFromTranscript(
           entry.sessionId,
           storePath,
@@ -895,7 +898,7 @@ export function listSessionsFromStore(params: {
         }
       }
     }
-    return { ...rest, derivedTitle, lastMessagePreview } satisfies GatewaySessionRow;
+    return { ...rest, createdAt, derivedTitle, lastMessagePreview } satisfies GatewaySessionRow;
   });
 
   return {

@@ -2,6 +2,7 @@ import type { GatewayBrowserClient } from "../gateway.ts";
 import type { ConfigSchemaResponse, ConfigSnapshot, ConfigUiHints } from "../types.ts";
 import type { JsonSchema } from "../views/config-form.shared.ts";
 import { coerceFormValues } from "./config/form-coerce.ts";
+import { parseJson5Object } from "../json5-parse.ts";
 import {
   cloneConfigObject,
   removePathValue,
@@ -225,6 +226,16 @@ export async function runUpdate(state: ConfigState) {
   } finally {
     state.updateRunning = false;
   }
+}
+
+export function syncConfigFormFromRaw(state: ConfigState): boolean {
+  const parsed = parseJson5Object(state.configRaw);
+  if (!parsed) {
+    return false;
+  }
+  state.configForm = cloneConfigObject(parsed);
+  state.configFormDirty = true;
+  return true;
 }
 
 export function updateConfigFormValue(

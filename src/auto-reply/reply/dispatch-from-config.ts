@@ -104,6 +104,17 @@ export async function dispatchReplyFromConfig(params: {
   const chatId = ctx.To ?? ctx.From;
   const messageId = ctx.MessageSid ?? ctx.MessageSidFirst ?? ctx.MessageSidLast;
   const sessionKey = ctx.SessionKey;
+
+  // Best-effort inbound message content for diagnostics + OTEL trace previews.
+  const inboundText =
+    typeof ctx.BodyForCommands === "string"
+      ? ctx.BodyForCommands
+      : typeof ctx.RawBody === "string"
+        ? ctx.RawBody
+        : typeof ctx.Body === "string"
+          ? ctx.Body
+          : "";
+
   const startTime = diagnosticsEnabled ? Date.now() : 0;
   const canTrackSession = diagnosticsEnabled && Boolean(sessionKey);
 
@@ -112,6 +123,7 @@ export async function dispatchReplyFromConfig(params: {
     opts?: {
       reason?: string;
       error?: string;
+      outputText?: string;
     },
   ) => {
     if (!diagnosticsEnabled) {
@@ -124,6 +136,8 @@ export async function dispatchReplyFromConfig(params: {
       sessionKey,
       durationMs: Date.now() - startTime,
       outcome,
+      inputText: inboundText,
+      outputText: opts?.outputText,
       reason: opts?.reason,
       error: opts?.error,
     });
@@ -167,14 +181,7 @@ export async function dispatchReplyFromConfig(params: {
     typeof ctx.Timestamp === "number" && Number.isFinite(ctx.Timestamp) ? ctx.Timestamp : undefined;
   const messageIdForHook =
     ctx.MessageSidFull ?? ctx.MessageSid ?? ctx.MessageSidFirst ?? ctx.MessageSidLast;
-  const content =
-    typeof ctx.BodyForCommands === "string"
-      ? ctx.BodyForCommands
-      : typeof ctx.RawBody === "string"
-        ? ctx.RawBody
-        : typeof ctx.Body === "string"
-          ? ctx.Body
-          : "";
+  const content = inboundText;
   const channelId = (ctx.OriginatingChannel ?? ctx.Surface ?? ctx.Provider ?? "").toLowerCase();
   const conversationId = ctx.OriginatingTo ?? ctx.To ?? ctx.From ?? undefined;
 
@@ -328,7 +335,7 @@ export async function dispatchReplyFromConfig(params: {
       }
       const counts = dispatcher.getQueuedCounts();
       counts.final += routedFinalCount;
-      recordProcessed("completed", { reason: "fast_abort" });
+      recordProcessed("completed", { reason: "fast_abort", outputText: payload.text });
       markIdle("message_completed");
       return { queuedFinal, counts };
     }
@@ -352,7 +359,7 @@ export async function dispatchReplyFromConfig(params: {
         `Send blocked by policy for session ${sessionStoreEntry.sessionKey ?? sessionKey ?? "unknown"}`,
       );
       const counts = dispatcher.getQueuedCounts();
-      recordProcessed("completed", { reason: "send_policy_deny" });
+      recordProcessed("completed", { reason: "send_policy_deny", outputText: undefined });
       markIdle("message_completed");
       return { queuedFinal: false, counts };
     }
@@ -569,7 +576,13 @@ export async function dispatchReplyFromConfig(params: {
 
     const counts = dispatcher.getQueuedCounts();
     counts.final += routedFinalCount;
-    recordProcessed("completed");
+    const replyText = replies
+      .map((reply) => (typeof reply.text === "string" ? reply.text : ""))
+      .filter(Boolean)
+      .join("\n\n");
+    const outputText = replyText || accumulatedBlockText || undefined;
+
+    recordProcessed("completed", { outputText });
     markIdle("message_completed");
     return { queuedFinal, counts };
   } catch (err) {

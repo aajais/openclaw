@@ -23,7 +23,8 @@ export type ChatHost = {
   refreshSessionsAfterChat: Set<string>;
 };
 
-export const CHAT_SESSIONS_ACTIVE_MINUTES = 120;
+// Chat sidebar should show all sessions (running or not). Keep filters for the Sessions tab.
+export const CHAT_SESSIONS_ACTIVE_MINUTES = 0;
 
 export function isChatBusy(host: ChatHost) {
   return host.chatSending || Boolean(host.chatRunId);
@@ -210,6 +211,7 @@ export async function refreshChat(host: ChatHost, opts?: { scheduleScroll?: bool
     loadChatHistory(host as unknown as Parameters<typeof loadChatHistory>[0]),
     loadSessions(host as unknown as Parameters<typeof loadSessions>[0], {
       activeMinutes: CHAT_SESSIONS_ACTIVE_MINUTES,
+      limit: 0,
     }),
     refreshChatAvatar(host),
   ]);

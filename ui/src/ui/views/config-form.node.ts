@@ -339,6 +339,9 @@ export function renderNode(params: {
   const { label, help, tags } = resolveFieldMeta(path, schema, hints);
   const key = pathKey(path);
   const criteria = params.searchCriteria;
+  const configured = value !== undefined;
+  const configuredClass = configured ? " cfg-field--configured" : "";
+  const toggleConfiguredClass = configured ? " cfg-toggle-row--configured" : "";
 
   if (unsupported.has(key)) {
     return html`<div class="cfg-field cfg-field--error">
@@ -382,7 +385,7 @@ export function renderNode(params: {
       // Use segmented control for small sets
       const resolvedValue = value ?? schema.default;
       return html`
-        <div class="cfg-field">
+        <div class="cfg-field${configuredClass}">
           ${showLabel ? html`<label class="cfg-field__label">${label}</label>` : nothing}
           ${help ? html`<div class="cfg-field__help">${help}</div>` : nothing}
           ${renderTags(tags)}
@@ -448,7 +451,7 @@ export function renderNode(params: {
     if (options.length <= 5) {
       const resolvedValue = value ?? schema.default;
       return html`
-        <div class="cfg-field">
+        <div class="cfg-field${configuredClass}">
           ${showLabel ? html`<label class="cfg-field__label">${label}</label>` : nothing}
           ${help ? html`<div class="cfg-field__help">${help}</div>` : nothing}
           ${renderTags(tags)}
@@ -491,7 +494,7 @@ export function renderNode(params: {
           ? schema.default
           : false;
     return html`
-      <label class="cfg-toggle-row ${disabled ? "disabled" : ""}">
+      <label class="cfg-toggle-row${toggleConfiguredClass} ${disabled ? "disabled" : ""}">
         <div class="cfg-toggle-row__content">
           <span class="cfg-toggle-row__label">${label}</span>
           ${help ? html`<span class="cfg-toggle-row__help">${help}</span>` : nothing}
@@ -555,9 +558,11 @@ function renderTextInput(params: {
         ? `Default: ${String(schema.default)}`
         : "");
   const displayValue = value ?? "";
+  const configured = value !== undefined;
+  const configuredClass = configured ? " cfg-field--configured" : "";
 
   return html`
-    <div class="cfg-field">
+    <div class="cfg-field${configuredClass}">
       ${showLabel ? html`<label class="cfg-field__label">${label}</label>` : nothing}
       ${help ? html`<div class="cfg-field__help">${help}</div>` : nothing}
       ${renderTags(tags)}
@@ -622,9 +627,11 @@ function renderNumberInput(params: {
   const { label, help, tags } = resolveFieldMeta(path, schema, hints);
   const displayValue = value ?? schema.default ?? "";
   const numValue = typeof displayValue === "number" ? displayValue : 0;
+  const configured = value !== undefined;
+  const configuredClass = configured ? " cfg-field--configured" : "";
 
   return html`
-    <div class="cfg-field">
+    <div class="cfg-field${configuredClass}">
       ${showLabel ? html`<label class="cfg-field__label">${label}</label>` : nothing}
       ${help ? html`<div class="cfg-field__help">${help}</div>` : nothing}
       ${renderTags(tags)}
@@ -676,9 +683,11 @@ function renderSelect(params: {
     (opt) => opt === resolvedValue || String(opt) === String(resolvedValue),
   );
   const unset = "__unset__";
+  const configured = value !== undefined;
+  const configuredClass = configured ? " cfg-field--configured" : "";
 
   return html`
-    <div class="cfg-field">
+    <div class="cfg-field${configuredClass}">
       ${showLabel ? html`<label class="cfg-field__label">${label}</label>` : nothing}
       ${help ? html`<div class="cfg-field__help">${help}</div>` : nothing}
       ${renderTags(tags)}

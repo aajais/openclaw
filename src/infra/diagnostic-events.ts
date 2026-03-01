@@ -78,6 +78,10 @@ export type DiagnosticMessageProcessedEvent = DiagnosticBaseEvent & {
   sessionId?: string;
   durationMs?: number;
   outcome: "completed" | "skipped" | "error";
+  /** Redacted, human-readable inbound message text (optional). */
+  inputText?: string;
+  /** Redacted, human-readable assistant output text (optional). */
+  outputText?: string;
   reason?: string;
   error?: string;
 };

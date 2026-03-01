@@ -131,6 +131,10 @@ export function logMessageProcessed(params: {
   sessionKey?: string;
   durationMs?: number;
   outcome: "completed" | "skipped" | "error";
+  /** Redacted inbound message text (optional). */
+  inputText?: string;
+  /** Redacted assistant output text (optional). */
+  outputText?: string;
   reason?: string;
   error?: string;
 }) {
@@ -160,6 +164,8 @@ export function logMessageProcessed(params: {
     sessionKey: params.sessionKey,
     durationMs: params.durationMs,
     outcome: params.outcome,
+    inputText: params.inputText,
+    outputText: params.outputText,
     reason: params.reason,
     error: params.error,
   });
