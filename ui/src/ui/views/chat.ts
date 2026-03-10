@@ -90,8 +90,25 @@ const COMPACTION_TOAST_DURATION_MS = 5000;
 const FALLBACK_TOAST_DURATION_MS = 8000;
 
 function adjustTextareaHeight(el: HTMLTextAreaElement) {
+  // Resize-to-content, but cap height to avoid giant composers on mobile.
   el.style.height = "auto";
-  el.style.height = `${el.scrollHeight}px`;
+
+  let max = 0;
+  try {
+    const raw = getComputedStyle(el).maxHeight;
+    if (raw && raw !== "none") {
+      const parsed = Number.parseFloat(raw);
+      if (Number.isFinite(parsed)) {
+        max = parsed;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  const next = max > 0 ? Math.min(el.scrollHeight, max) : el.scrollHeight;
+  el.style.height = `${next}px`;
+  el.style.overflowY = el.scrollHeight > next ? "auto" : "hidden";
 }
 
 function renderCompactionIndicator(status: CompactionIndicatorStatus | null | undefined) {

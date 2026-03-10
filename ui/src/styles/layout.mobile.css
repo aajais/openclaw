@@ -120,6 +120,14 @@
     border-radius: var(--radius-md);
     white-space: nowrap;
     flex-shrink: 0;
+    min-height: 44px; /* touch target */
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .nav-item:focus-visible {
+    outline: 2px solid rgba(41, 171, 226, 0.55);
+    outline-offset: 2px;
   }
 
   /* Content */
@@ -329,6 +337,25 @@
   .chat-sessions__actions {
     opacity: 1;
     pointer-events: auto;
+  }
+
+  /* Mobile ergonomics: make action buttons meet the ~44px touch target */
+  .chat-sessions__menuTrigger,
+  .chat-sessions__stop {
+    width: 44px;
+    height: 44px;
+  }
+
+  .chat-sessions__menuTrigger svg,
+  .chat-sessions__stop svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .chat-sessions__menuTrigger:focus-visible,
+  .chat-sessions__stop:focus-visible {
+    outline: 2px solid rgba(41, 171, 226, 0.55);
+    outline-offset: 2px;
   }
 
   /* Give pills space for menu */
