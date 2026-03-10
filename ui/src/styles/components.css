@@ -1832,6 +1832,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+:root[data-theme="light"] .chat-sessions__menuTrigger {
   color: var(--muted);
 }
 
