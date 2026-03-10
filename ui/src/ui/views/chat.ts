@@ -81,7 +81,12 @@ export type ChatProps = {
   onQueueRemove: (id: string) => void;
   onNewSession: () => void;
   chatSessionsSort?: "recent" | "name";
+  chatSessionCategories?: Record<string, import("../storage.ts").ChatCategory>;
   onChatSessionsSortChange?: (next: "recent" | "name") => void;
+  onChatSessionCategoryChange?: (
+    sessionKey: string,
+    category: import("../storage.ts").ChatCategory,
+  ) => void;
   onOpenSidebar?: (content: string) => void;
   onCloseSidebar?: () => void;
   onSplitRatioChange?: (ratio: number) => void;
@@ -426,9 +431,10 @@ export function renderChat(props: ChatProps) {
                 const row = rowsByKey.get(key);
                 const label = row?.label ? row.label : key;
                 const badge = badges[key];
+                const category = props.chatSessionCategories?.[key] ?? "other";
                 return html`
                   <div
-                    class="chat-sessions__item ${key === props.sessionKey ? "chat-sessions__item--active" : ""}"
+                    class="chat-sessions__item chat-sessions__item--cat-${category} ${key === props.sessionKey ? "chat-sessions__item--active" : ""}"
                     role="listitem"
                     title=${key}
                     tabindex="0"
@@ -509,6 +515,37 @@ export function renderChat(props: ChatProps) {
                           >
                             Rename
                           </button>
+
+                          <div class="chat-sessions__menuSection" role="presentation">
+                            <div class="chat-sessions__menuSectionTitle">Category</div>
+                            ${(
+                              [
+                                ["personal", "Personal"],
+                                ["dev", "Dev"],
+                                ["informational", "Informational"],
+                                ["other", "Other"],
+                              ] as const
+                            ).map(([value, label]) => {
+                              const active = category === value;
+                              return html`
+                                <button
+                                  class="chat-sessions__menuItem ${active ? "chat-sessions__menuItem--active" : ""}"
+                                  type="button"
+                                  role="menuitem"
+                                  ?disabled=${!props.connected}
+                                  @click=${(e: Event) => {
+                                    e.stopPropagation();
+                                    (e.currentTarget as HTMLElement)
+                                      .closest("details")
+                                      ?.removeAttribute("open");
+                                    props.onChatSessionCategoryChange?.(key, value);
+                                  }}
+                                >
+                                  ${label}
+                                </button>
+                              `;
+                            })}
+                          </div>
                           <button
                             class="chat-sessions__menuItem chat-sessions__menuItem--danger"
                             type="button"

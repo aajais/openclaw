@@ -1018,6 +1018,17 @@ export function renderApp(state: AppViewState) {
                   if (!deleted) {
                     return;
                   }
+
+                  // Cleanup category assignment.
+                  const categories = { ...state.settings.chatSessionCategories };
+                  if (categories[key]) {
+                    delete categories[key];
+                    state.applySettings({
+                      ...state.settings,
+                      chatSessionCategories: categories,
+                    });
+                  }
+
                   if (key === state.sessionKey) {
                     const nextKey = state.sessionsResult?.sessions?.[0]?.key ?? "main";
                     state.switchChatSession(nextKey);
@@ -1048,10 +1059,21 @@ export function renderApp(state: AppViewState) {
                 onAbort: () => void state.handleAbortChat(),
                 onQueueRemove: (id) => state.removeQueuedMessage(id),
                 chatSessionsSort: state.settings.chatSessionsSort ?? "recent",
+                chatSessionCategories: state.settings.chatSessionCategories ?? {},
                 onChatSessionsSortChange: (next) => {
                   state.applySettings({
                     ...state.settings,
                     chatSessionsSort: next,
+                  });
+                },
+                onChatSessionCategoryChange: (sessionKey, category) => {
+                  const nextMap = {
+                    ...state.settings.chatSessionCategories,
+                    [sessionKey]: category,
+                  };
+                  state.applySettings({
+                    ...state.settings,
+                    chatSessionCategories: nextMap,
                   });
                 },
                 onNewSession: () => {

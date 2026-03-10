@@ -3,6 +3,8 @@ const KEY = "openclaw.control.settings.v1";
 import { isSupportedLocale } from "../i18n/index.ts";
 import type { ThemeMode } from "./theme.ts";
 
+export type ChatCategory = "personal" | "dev" | "informational" | "other";
+
 export type UiSettings = {
   gatewayUrl: string;
   token: string;
@@ -12,6 +14,7 @@ export type UiSettings = {
   chatFocusMode: boolean;
   chatShowThinking: boolean;
   chatSessionsSort: "recent" | "name";
+  chatSessionCategories?: Record<string, ChatCategory>;
   splitRatio: number; // Sidebar split ratio (0.4 to 0.7, default 0.6)
   navCollapsed: boolean; // Collapsible sidebar state
   navGroupsCollapsed: Record<string, boolean>; // Which nav groups are collapsed
@@ -33,6 +36,7 @@ export function loadSettings(): UiSettings {
     chatFocusMode: false,
     chatShowThinking: true,
     chatSessionsSort: "recent",
+    chatSessionCategories: {},
     splitRatio: 0.6,
     navCollapsed: false,
     navGroupsCollapsed: {},
@@ -73,6 +77,10 @@ export function loadSettings(): UiSettings {
         parsed.chatSessionsSort === "name" || parsed.chatSessionsSort === "recent"
           ? parsed.chatSessionsSort
           : defaults.chatSessionsSort,
+      chatSessionCategories:
+        typeof parsed.chatSessionCategories === "object" && parsed.chatSessionCategories !== null
+          ? parsed.chatSessionCategories
+          : defaults.chatSessionCategories,
       splitRatio:
         typeof parsed.splitRatio === "number" &&
         parsed.splitRatio >= 0.4 &&
