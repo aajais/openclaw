@@ -420,6 +420,39 @@
     font-size: 12px;
   }
 
+  /* Chat queue (queued messages) */
+  .chat-queue {
+    margin-top: 8px;
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .chat-queue__title {
+    font-size: 11px;
+  }
+
+  .chat-queue__list {
+    gap: 6px;
+  }
+
+  .chat-queue__item {
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .chat-queue__text {
+    font-size: 12px;
+    line-height: 1.35;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  .chat-queue__remove {
+    padding: 2px 8px;
+    font-size: 11px;
+    min-height: 28px;
+  }
+
   /* Lists */
   .list-item {
     padding: 10px;
