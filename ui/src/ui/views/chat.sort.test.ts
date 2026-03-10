@@ -73,8 +73,7 @@ describe("chat session sorting", () => {
       (el.textContent ?? "").trim(),
     );
 
-    // Active session is always pinned first.
-    expect(labels[0]).toBe("Main");
-    expect(labels.slice(1, 3)).toEqual(["Alpha", "Bravo"]);
+    // Stable ordering: alphabetical by label (no active-session pinning).
+    expect(labels.slice(0, 3)).toEqual(["Alpha", "Bravo", "Main"]);
   });
 });

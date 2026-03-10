@@ -395,13 +395,6 @@ export function renderChat(props: ChatProps) {
               const ordered = Array.from(keys);
               const sortMode = props.chatSessionsSort ?? "recent";
               ordered.sort((a, b) => {
-                if (a === props.sessionKey) {
-                  return -1;
-                }
-                if (b === props.sessionKey) {
-                  return 1;
-                }
-
                 const aRow = rowsByKey.get(a);
                 const bRow = rowsByKey.get(b);
 
