@@ -36,6 +36,8 @@ export type ChatProps = {
   onSessionKeyChange: (next: string) => void;
   sessionBadges?: Record<string, { running: boolean; error: boolean }>;
   onAbortSession?: (sessionKey: string) => void;
+  onRenameSession?: (sessionKey: string, nextLabel: string | null) => void;
+  onDeleteSession?: (sessionKey: string) => void;
   thinkingLevel: string | null;
   showThinking: boolean;
   loading: boolean;
@@ -385,39 +387,133 @@ export function renderChat(props: ChatProps) {
                 const label = row?.label ? row.label : key;
                 const badge = badges[key];
                 return html`
-                  <button
+                  <div
                     class="chat-sessions__item ${key === props.sessionKey ? "chat-sessions__item--active" : ""}"
-                    type="button"
                     role="listitem"
-                    @click=${() => props.onSessionKeyChange(key)}
                     title=${key}
+                    tabindex="0"
+                    @click=${() => props.onSessionKeyChange(key)}
+                    @keydown=${(e: KeyboardEvent) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        props.onSessionKeyChange(key);
+                      }
+                    }}
                   >
                     <span class="chat-sessions__label">${label}</span>
-                    <span class="chat-sessions__badges">
-                      ${
-                        badge?.running
-                          ? html`
-                              <span class="chat-sessions__badge chat-sessions__badge--running">running</span>
-                              ${
-                                props.onAbortSession
-                                  ? html`
-                                      <button
-                                        type="button"
-                                        class="chat-sessions__stop"
-                                        title="Stop"
-                                        @click=${(e: Event) => {
-                                          e.stopPropagation();
-                                          props.onAbortSession?.(key);
-                                        }}
-                                      >
-                                        Stop
-                                      </button>
-                                    `
-                                  : nothing
+
+                    <span class="chat-sessions__actions" aria-label="Chat actions">
+                      <details
+                        class="chat-sessions__menu"
+                        @click=${(e: Event) => e.stopPropagation()}
+                        @toggle=${(e: Event) => {
+                          const el = e.currentTarget as HTMLDetailsElement;
+                          if (!el.open) {
+                            return;
+                          }
+                          // Position menu with fixed coords so it isn't clipped by overflow containers.
+                          window.requestAnimationFrame(() => {
+                            const trigger = el.querySelector<HTMLElement>(
+                              ".chat-sessions__menuTrigger",
+                            );
+                            const menu = el.querySelector<HTMLElement>(".chat-sessions__menuItems");
+                            if (!trigger || !menu) {
+                              return;
+                            }
+                            const r = trigger.getBoundingClientRect();
+                            const gap = 6;
+                            const top = Math.min(
+                              window.innerHeight - menu.offsetHeight - 8,
+                              r.bottom + gap,
+                            );
+                            const left = Math.min(
+                              window.innerWidth - menu.offsetWidth - 8,
+                              r.right - menu.offsetWidth,
+                            );
+                            menu.style.top = `${Math.max(8, top)}px`;
+                            menu.style.left = `${Math.max(8, left)}px`;
+                          });
+                        }}
+                      >
+                        <summary
+                          class="chat-sessions__menuTrigger"
+                          role="button"
+                          aria-label="Chat options"
+                          title="Options"
+                          @click=${(e: Event) => e.stopPropagation()}
+                        >
+                          ${icons.dotsHorizontal}
+                        </summary>
+                        <div class="chat-sessions__menuItems" role="menu">
+                          <button
+                            class="chat-sessions__menuItem"
+                            type="button"
+                            role="menuitem"
+                            ?disabled=${!props.connected}
+                            @click=${(e: Event) => {
+                              e.stopPropagation();
+                              (e.currentTarget as HTMLElement)
+                                .closest("details")
+                                ?.removeAttribute("open");
+                              if (!props.onRenameSession) {
+                                return;
                               }
-                            `
-                          : nothing
-                      }
+                              const currentLabel = row?.label ?? "";
+                              const next = window.prompt("Chat title", currentLabel);
+                              if (next === null) {
+                                return;
+                              }
+                              const trimmed = next.trim();
+                              props.onRenameSession(key, trimmed.length ? trimmed : null);
+                            }}
+                          >
+                            Rename
+                          </button>
+                          <button
+                            class="chat-sessions__menuItem chat-sessions__menuItem--danger"
+                            type="button"
+                            role="menuitem"
+                            ?disabled=${!props.connected}
+                            @click=${(e: Event) => {
+                              e.stopPropagation();
+                              (e.currentTarget as HTMLElement)
+                                .closest("details")
+                                ?.removeAttribute("open");
+                              props.onDeleteSession?.(key);
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </details>
+
+                      ${(() => {
+                        const showStop =
+                          Boolean(props.onAbortSession) &&
+                          (key === props.sessionKey || badge?.running);
+                        if (!showStop) {
+                          return nothing;
+                        }
+                        const running = Boolean(badge?.running);
+                        return html`
+                          <button
+                            type="button"
+                            class="chat-sessions__stop ${running ? "chat-sessions__stop--running" : "chat-sessions__stop--idle"}"
+                            title=${running ? "Stop" : "Not running"}
+                            ?disabled=${!running}
+                            @click=${(e: Event) => {
+                              e.stopPropagation();
+                              if (!running) {
+                                return;
+                              }
+                              props.onAbortSession?.(key);
+                            }}
+                          >
+                            ${icons.stop}
+                          </button>
+                        `;
+                      })()}
+
                       ${
                         badge?.error
                           ? html`
@@ -426,7 +522,7 @@ export function renderChat(props: ChatProps) {
                           : nothing
                       }
                     </span>
-                  </button>
+                  </div>
                 `;
               });
             })()}

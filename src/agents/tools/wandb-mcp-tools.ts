@@ -6,7 +6,6 @@ import type { AnyAgentTool } from "./common.js";
 import { jsonResult, ToolInputError } from "./common.js";
 
 const DEFAULT_SERVER_NAME = "wandb";
-const DEFAULT_SERVER_URL = "https://mcp.withwandb.com/mcp";
 
 const McpPassthroughSchema = Type.Object({
   /** Optional: override the mcporter server name (defaults to "wandb"). */
@@ -65,18 +64,14 @@ async function runMcporterCall(opts: {
 
   if (!process.env.WANDB_API_KEY?.trim()) {
     // We purposely rely on env, not config, so secrets don't end up committed.
-    throw new ToolInputError(
-      "WANDB_API_KEY env var is required to call the W&B MCP server.",
-    );
+    throw new ToolInputError("WANDB_API_KEY env var is required to call the W&B MCP server.");
   }
 
   const mcporterConfigPath = resolveMcporterConfigPath();
 
   // If the user passed serverUrl, call via --http-url so we don't require a named config.
   // Otherwise prefer the configured server entry in mcporter.json (e.g. "wandb").
-  const selector = serverUrl
-    ? `${serverUrl}.${opts.toolName}`
-    : `${serverName}.${opts.toolName}`;
+  const selector = serverUrl ? `${serverUrl}.${opts.toolName}` : `${serverName}.${opts.toolName}`;
 
   const argsObj = normalizeArgs(opts.params);
   const timeoutMs =

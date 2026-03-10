@@ -526,11 +526,21 @@ export function createOpenClawCodingTools(options?: {
   const normalized = subagentFiltered.map((tool) =>
     normalizeToolParameters(tool, { modelProvider: options?.modelProvider }),
   );
+  const traceEnabled =
+    options?.config?.diagnostics?.enabled === true &&
+    options?.config?.diagnostics?.trace?.enabled === true;
+  const traceCfg = options?.config?.diagnostics?.trace;
+
   const withHooks = normalized.map((tool) =>
     wrapToolWithBeforeToolCallHook(tool, {
       agentId,
       sessionKey: options?.sessionKey,
       loopDetection: resolveToolLoopDetectionConfig({ cfg: options?.config, agentId }),
+      trace: {
+        enabled: traceEnabled,
+        includeToolArgs: traceCfg?.includeToolArgs,
+        includeToolOutputs: traceCfg?.includeToolOutputs,
+      },
     }),
   );
   const withAbort = options?.abortSignal

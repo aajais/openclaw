@@ -31,6 +31,11 @@ export type SubscribeEmbeddedPiSessionParams = {
   enforceFinalTag?: boolean;
   config?: OpenClawConfig;
   sessionKey?: string;
+
+  /** True iff Weave Native is initialized and available for this run. */
+  weaveReady?: boolean;
+  /** Best-effort per-turn user prompt (used for tracing/logging). */
+  turnPrompt?: string;
 };
 
 export type { BlockReplyChunking } from "./pi-embedded-block-chunker.js";

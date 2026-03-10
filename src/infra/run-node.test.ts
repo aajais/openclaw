@@ -26,7 +26,12 @@ describe("run-node script", () => {
 
         const nodeCalls: string[][] = [];
         const spawn = (cmd: string, args: string[]) => {
-          if (cmd === "pnpm") {
+          const isTsdownBuild =
+            cmd === process.execPath &&
+            args[0]?.includes("tsdown") &&
+            args.some((a) => a === "--no-clean");
+          const isPnpmBuild = cmd === "pnpm" && args.includes("exec");
+          if (isTsdownBuild || isPnpmBuild) {
             fsSync.writeFileSync(argsPath, args.join(" "), "utf-8");
             if (!args.includes("--no-clean")) {
               fsSync.rmSync(path.join(tmp, "dist", "control-ui"), { recursive: true, force: true });
@@ -60,7 +65,7 @@ describe("run-node script", () => {
         });
 
         expect(exitCode).toBe(0);
-        await expect(fs.readFile(argsPath, "utf-8")).resolves.toContain("exec tsdown --no-clean");
+        await expect(fs.readFile(argsPath, "utf-8")).resolves.toContain("--no-clean");
         await expect(fs.readFile(indexPath, "utf-8")).resolves.toContain("sentinel");
         expect(nodeCalls).toEqual([[process.execPath, "openclaw.mjs", "--version"]]);
       });

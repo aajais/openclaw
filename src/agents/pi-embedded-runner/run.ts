@@ -1,7 +1,9 @@
 import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import type { ThinkLevel } from "../../auto-reply/thinking.js";
+import { emitDiagnosticEvent, isDiagnosticsEnabled } from "../../infra/diagnostic-events.js";
 import { generateSecureToken } from "../../infra/secure-random.js";
+import { clearActiveRunForSession, setActiveRunForSession } from "../../infra/trace-run-context.js";
 import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
 import type { PluginHookBeforeAgentStartResult } from "../../plugins/types.js";
 import { enqueueCommandInLane } from "../../process/command-queue.js";
@@ -211,6 +213,25 @@ export async function runEmbeddedPiAgent(
   return enqueueSession(() =>
     enqueueGlobal(async () => {
       const started = Date.now();
+      const traceEnabled =
+        isDiagnosticsEnabled(params.config) && params.config?.diagnostics?.trace?.enabled === true;
+      const traceCfg = params.config?.diagnostics?.trace;
+      void traceCfg;
+      const threadId = params.sessionKey;
+      const turnId = params.runId;
+      if (traceEnabled && threadId && turnId) {
+        setActiveRunForSession(threadId, turnId);
+        emitDiagnosticEvent({
+          type: "trace.turn",
+          phase: "start",
+          sessionKey: threadId,
+          sessionId: params.sessionId,
+          runId: turnId,
+          channel: params.messageChannel ?? params.messageProvider,
+          messageId: params.currentMessageId,
+          inputText: params.prompt,
+        });
+      }
       const workspaceResolution = resolveRunWorkspaceDir({
         workspaceDir: params.workspaceDir,
         sessionKey: params.sessionKey,
@@ -633,6 +654,11 @@ export async function runEmbeddedPiAgent(
             enforceFinalTag: params.enforceFinalTag,
           });
 
+          if (attempt == null) {
+            throw new Error(
+              "runEmbeddedAttempt returned undefined (Weave openclaw.turn op may not await or return fn result)",
+            );
+          }
           const {
             aborted,
             promptError,
@@ -1157,6 +1183,18 @@ export async function runEmbeddedPiAgent(
           };
         }
       } finally {
+        if (traceEnabled && threadId && turnId) {
+          emitDiagnosticEvent({
+            type: "trace.turn",
+            phase: "end",
+            sessionKey: threadId,
+            sessionId: params.sessionId,
+            runId: turnId,
+            channel: params.messageChannel ?? params.messageProvider,
+            messageId: params.currentMessageId,
+          });
+          clearActiveRunForSession(threadId, turnId);
+        }
         process.chdir(prevCwd);
       }
     }),

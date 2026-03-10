@@ -1011,6 +1011,20 @@ export function renderApp(state: AppViewState) {
                 sessions: state.sessionsResult,
                 sessionBadges: state.chatSessionBadges,
                 onAbortSession: (key) => void state.abortChatSession(key),
+                onRenameSession: (key, nextLabel) =>
+                  void patchSession(state, key, { label: nextLabel }),
+                onDeleteSession: async (key) => {
+                  const deleted = await deleteSessionAndRefresh(state, key);
+                  if (!deleted) {
+                    return;
+                  }
+                  if (key === state.sessionKey) {
+                    const nextKey = state.sessionsResult?.sessions?.[0]?.key ?? "main";
+                    state.switchChatSession(nextKey);
+                    void loadChatHistory(state);
+                    void refreshChatAvatar(state);
+                  }
+                },
                 focusMode: chatFocus,
                 onRefresh: () => {
                   state.resetToolStream();

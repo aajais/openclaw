@@ -196,12 +196,34 @@ export type DiagnosticsCacheTraceConfig = {
   includeSystem?: boolean;
 };
 
+export type DiagnosticsTraceConfig = {
+  /** Enable high-fidelity per-turn tracing (Weave-style threads/turns). */
+  enabled?: boolean;
+  /** Include an explicit reasoning summary (not hidden chain-of-thought). */
+  includeReasoningSummary?: boolean;
+  /** Include system prompt + per-turn prompt content in exported logs. */
+  includePrompts?: boolean;
+  /** Include tool call arguments in exported logs. */
+  includeToolArgs?: boolean;
+  /** Include tool outputs/results in exported logs. */
+  includeToolOutputs?: boolean;
+};
+
 export type DiagnosticsConfig = {
   enabled?: boolean;
   /** Optional ad-hoc diagnostics flags (e.g. "telegram.http"). */
   flags?: string[];
+
+  /** W&B Weave TypeScript SDK logging (Threads/Turns). */
+  weaveNative?: {
+    enabled?: boolean;
+    /** Weave project id, e.g. "entity/project". If omitted, uses env WEAVE_PROJECT. */
+    project?: string;
+  };
+
   otel?: DiagnosticsOtelConfig;
   cacheTrace?: DiagnosticsCacheTraceConfig;
+  trace?: DiagnosticsTraceConfig;
 };
 
 export type WebReconnectConfig = {

@@ -37,6 +37,7 @@ import {
   resetChatScroll as resetChatScrollInternal,
   scheduleChatScroll as scheduleChatScrollInternal,
 } from "./app-scroll.ts";
+import { syncUrlWithSessionKey } from "./app-settings.ts";
 import {
   applySettings as applySettingsInternal,
   loadCron as loadCronInternal,
@@ -771,6 +772,12 @@ export class OpenClawApp extends LitElement {
       sessionKey: next,
       lastActiveSessionKey: next,
     });
+    // Keep the URL in sync when switching chats via the sidebar.
+    syncUrlWithSessionKey(
+      this as unknown as Parameters<typeof syncUrlWithSessionKey>[0],
+      next,
+      false,
+    );
     this.updateChatBadges();
   }
 
@@ -794,12 +801,12 @@ export class OpenClawApp extends LitElement {
     // - history survives switching sessions (backend stores under agent:<id>:...)
     // - sidebar/session lists round-trip the same key
     const parsed = parseAgentSessionKey(this.sessionKey);
-    const agentId = parsed?.agentId ||
+    const agentId =
+      parsed?.agentId ||
       (
-        (this.hello?.snapshot as { sessionDefaults?: { defaultAgentId?: string } } | undefined)
-          ?.sessionDefaults?.defaultAgentId?.trim() ||
-        "main"
-      );
+        this.hello?.snapshot as { sessionDefaults?: { defaultAgentId?: string } } | undefined
+      )?.sessionDefaults?.defaultAgentId?.trim() ||
+      "main";
     // Short, URL-safe session keys.
     return `agent:${agentId}:chat-${generateUUID().slice(0, 8)}`;
   }

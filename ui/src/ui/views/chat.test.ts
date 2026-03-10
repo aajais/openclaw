@@ -45,11 +45,40 @@ function createProps(overrides: Partial<ChatProps> = {}): ChatProps {
     onSend: () => undefined,
     onQueueRemove: () => undefined,
     onNewSession: () => undefined,
+    onRenameSession: () => undefined,
+    onDeleteSession: () => undefined,
     ...overrides,
   };
 }
 
 describe("chat view", () => {
+  it("renders per-chat menu trigger", () => {
+    const container = document.createElement("div");
+    render(
+      renderChat(
+        createProps({
+          sessions: {
+            ...createSessions(),
+            sessions: [
+              {
+                key: "main",
+                kind: "direct",
+                label: "main",
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+              },
+            ],
+          },
+          sessionKey: "main",
+        }),
+      ),
+      container,
+    );
+
+    const trigger = container.querySelector(".chat-sessions__menuTrigger");
+    expect(trigger).not.toBeNull();
+  });
+
   it("renders compacting indicator as a badge", () => {
     const container = document.createElement("div");
     render(

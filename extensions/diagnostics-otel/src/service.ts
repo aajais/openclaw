@@ -1,4 +1,4 @@
-import { metrics, trace, SpanStatusCode } from "@opentelemetry/api";
+import { context, metrics, trace, SpanStatusCode } from "@opentelemetry/api";
 import type { SeverityNumber } from "@opentelemetry/api-logs";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-proto";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-proto";
@@ -160,6 +160,8 @@ export function createDiagnosticsOtelService(): OpenClawPluginService {
       const meter = metrics.getMeter("openclaw");
       const tracer = trace.getTracer("openclaw");
 
+      const weaveTraceEnabled = ctx.config.diagnostics?.trace?.enabled === true;
+
       const tokensCounter = meter.createCounter("openclaw.tokens", {
         unit: "1",
         description: "Token usage by type",
@@ -233,6 +235,8 @@ export function createDiagnosticsOtelService(): OpenClawPluginService {
         description: "Run attempts",
       });
 
+      let otelLogger: ReturnType<LoggerProvider["getLogger"]> | null = null;
+
       if (logsEnabled) {
         const logExporter = new OTLPLogExporter({
           ...(logUrl ? { url: logUrl } : {}),
@@ -248,7 +252,7 @@ export function createDiagnosticsOtelService(): OpenClawPluginService {
           resource,
           processors: [logProcessor],
         });
-        const otelLogger = logProvider.getLogger("openclaw");
+        otelLogger = logProvider.getLogger("openclaw");
 
         stopLogTransport = registerLogTransport((logObj) => {
           try {
@@ -372,6 +376,42 @@ export function createDiagnosticsOtelService(): OpenClawPluginService {
         return span;
       };
 
+      const activeTurnSpans = new Map<string, ReturnType<typeof tracer.startSpan>>();
+      const activeLlmSpans = new Map<string, Array<ReturnType<typeof tracer.startSpan>>>();
+      const activeToolSpans = new Map<string, ReturnType<typeof tracer.startSpan>>();
+
+      const keyForTurn = (sessionKey: string | undefined, runId: string | undefined) =>
+        `${sessionKey ?? ""}::${runId ?? ""}`;
+
+      const safeJson = (value: unknown): string => {
+        try {
+          return JSON.stringify(value);
+        } catch {
+          return String(value);
+        }
+      };
+
+      const emitSpanLog = (
+        span: ReturnType<typeof tracer.startSpan> | undefined,
+        body: string,
+        attrs?: Record<string, string | number | boolean>,
+      ) => {
+        if (!otelLogger || !span) {
+          return;
+        }
+        const attributes = attrs ? redactOtelAttributes(attrs) : undefined;
+        // Bind the log record to the span context so backends can associate it.
+        context.with(trace.setSpan(context.active(), span), () => {
+          otelLogger?.emit({
+            body: redactSensitiveText(body),
+            severityText: "INFO",
+            severityNumber: 9 as SeverityNumber,
+            attributes,
+            timestamp: new Date(),
+          });
+        });
+      };
+
       const recordModelUsage = (evt: Extract<DiagnosticEventPayload, { type: "model.usage" }>) => {
         const attrs = {
           "openclaw.channel": evt.channel ?? "unknown",
@@ -418,7 +458,9 @@ export function createDiagnosticsOtelService(): OpenClawPluginService {
           });
         }
 
-        if (!tracesEnabled) {
+        // When weave trace spans are enabled, prefer attaching usage to the LLM call span
+        // (gen_ai.usage.*) and avoid emitting extra root spans per message.
+        if (!tracesEnabled || weaveTraceEnabled) {
           return;
         }
         const spanAttrs: Record<string, string | number> = {
@@ -529,11 +571,12 @@ export function createDiagnosticsOtelService(): OpenClawPluginService {
         if (typeof evt.durationMs === "number") {
           messageDurationHistogram.record(evt.durationMs, attrs);
         }
-        if (!tracesEnabled) {
+        // When weave trace spans are enabled, trace.turn/llm/tool spans become the single
+        // "one trace per turn" source of truth. Avoid emitting extra root diagnostic spans.
+        if (!tracesEnabled || weaveTraceEnabled) {
           return;
         }
 
-        // 1) Keep the raw diagnostic span.
         const spanAttrs: Record<string, string | number | boolean> = { ...attrs };
         addSessionIdentityAttrs(spanAttrs, evt);
         if (evt.chatId !== undefined) {
@@ -550,49 +593,6 @@ export function createDiagnosticsOtelService(): OpenClawPluginService {
           span.setStatus({ code: SpanStatusCode.ERROR, message: redactSensitiveText(evt.error) });
         }
         span.end();
-
-        // 2) Emit a turn-like span that Weave can group into threads.
-        // We want: 1 thread per OpenClaw sessionKey.
-        if (!evt.sessionKey) {
-          return;
-        }
-
-        const truncate = (value: string, max: number) =>
-          value.length > max ? `${value.slice(0, Math.max(0, max - 1))}…` : value;
-
-        const inputText = typeof evt.inputText === "string" ? redactSensitiveText(evt.inputText) : "";
-        const outputText =
-          typeof evt.outputText === "string" ? redactSensitiveText(evt.outputText) : "";
-
-        const threadId = evt.sessionKey;
-        const displayName = inputText.trim() ? truncate(inputText.trim(), 120) : "message";
-
-        const turnAttrs: Record<string, string | number | boolean> = {
-          "wandb.thread_id": threadId,
-          "wandb.is_turn": true,
-          "wandb.display_name": displayName,
-          // Weave attribute mappings (OpenInference-style) so it can render previews.
-          "input.value": inputText,
-          "output.value": outputText,
-          // Helpful extras
-          "openclaw.channel": evt.channel ?? "unknown",
-          "openclaw.sessionKey": evt.sessionKey,
-        };
-        if (evt.sessionId) {
-          turnAttrs["openclaw.sessionId"] = evt.sessionId;
-        }
-        if (evt.chatId !== undefined) {
-          turnAttrs["openclaw.chatId"] = String(evt.chatId);
-        }
-        if (evt.messageId !== undefined) {
-          turnAttrs["openclaw.messageId"] = String(evt.messageId);
-        }
-
-        const turnSpan = spanWithDuration("openclaw.message", turnAttrs, evt.durationMs);
-        if (evt.outcome === "error") {
-          turnSpan.setStatus({ code: SpanStatusCode.ERROR, message: "message error" });
-        }
-        turnSpan.end();
       };
 
       const recordLaneEnqueue = (
@@ -693,6 +693,185 @@ export function createDiagnosticsOtelService(): OpenClawPluginService {
             case "diagnostic.heartbeat":
               recordHeartbeat(evt);
               return;
+
+            case "trace.turn": {
+              if (!tracesEnabled) {
+                return;
+              }
+              const spanKey = keyForTurn(evt.sessionKey, evt.runId);
+              if (evt.phase === "start") {
+                const truncate = (value: string, max: number) =>
+                  value.length > max ? `${value.slice(0, Math.max(0, max - 1))}…` : value;
+
+                const threadId = evt.sessionKey ?? "unknown";
+                const inputText =
+                  typeof evt.inputText === "string" ? redactSensitiveText(evt.inputText) : "";
+                const displayName = inputText.trim() ? truncate(inputText.trim(), 120) : "turn";
+
+                const attrs: Record<string, string | number | boolean> = {
+                  // Weave Threads
+                  "wandb.thread_id": threadId,
+                  // Some backends may drop boolean-valued attributes; include both bool and string.
+                  "wandb.is_turn": true,
+                  "wandb.is_turn_str": "true",
+                  "wandb.display_name": displayName,
+
+                  // Weave call inputs/outputs (OpenInference-style keys Weave recognizes)
+                  "input.value": inputText,
+
+                  // Our own correlation keys
+                  thread_id: threadId,
+                  turn_id: evt.runId,
+                  "openclaw.sessionKey": threadId,
+                  "openclaw.runId": evt.runId,
+                  "openclaw.channel": evt.channel ?? "unknown",
+                };
+                if (evt.messageId != null) {
+                  attrs["openclaw.messageId"] = String(evt.messageId);
+                }
+                if (evt.chatId != null) {
+                  attrs["openclaw.chatId"] = String(evt.chatId);
+                }
+                const span = tracer.startSpan("openclaw.turn", { attributes: attrs });
+                activeTurnSpans.set(spanKey, span);
+                return;
+              }
+              const span = activeTurnSpans.get(spanKey);
+              if (span) {
+                span.end();
+              }
+              activeTurnSpans.delete(spanKey);
+              activeLlmSpans.delete(spanKey);
+              return;
+            }
+
+            case "trace.llm": {
+              if (!tracesEnabled) {
+                return;
+              }
+              const spanKey = keyForTurn(evt.sessionKey, evt.runId);
+              const parent = activeTurnSpans.get(spanKey);
+              if (evt.phase === "input") {
+                const span = tracer.startSpan(
+                  "openclaw.llm.call",
+                  {
+                    attributes: {
+                      // Weave Threads propagation (helps some UIs/indexers)
+                      "wandb.thread_id": evt.sessionKey ?? "unknown",
+
+                      thread_id: evt.sessionKey ?? "unknown",
+                      turn_id: evt.runId,
+                      "openclaw.provider": evt.provider ?? "unknown",
+                      "openclaw.model": evt.model ?? "unknown",
+                    },
+                  },
+                  parent ? trace.setSpan(context.active(), parent) : undefined,
+                );
+                const stack = activeLlmSpans.get(spanKey) ?? [];
+                stack.push(span);
+                activeLlmSpans.set(spanKey, stack);
+                if (evt.systemPrompt) {
+                  // Populate Weave inputs (Weave OTEL ingestion reads INPUT_KEYS like "input.value" / "input").
+                  // We rely on OTEL attribute unflattening: input.system_prompt => {input: {system_prompt: ...}}
+                  span.setAttribute("input.system_prompt", evt.systemPrompt);
+                  emitSpanLog(span, evt.systemPrompt, { "openclaw.kind": "system_prompt" });
+                }
+                if (evt.prompt) {
+                  span.setAttribute("input.prompt", evt.prompt);
+                  emitSpanLog(span, evt.prompt, { "openclaw.kind": "prompt" });
+                }
+                return;
+              }
+              // output
+              const stack = activeLlmSpans.get(spanKey);
+              const span = stack?.length ? stack[stack.length - 1] : undefined;
+              if (evt.outputText) {
+                span?.setAttribute("output.assistant_output", evt.outputText);
+                // Also populate the parent turn span output so Weave Threads can show the turn row.
+                parent?.setAttribute("output.value", evt.outputText);
+                emitSpanLog(span, evt.outputText, { "openclaw.kind": "assistant_output" });
+              }
+              if (evt.reasoningSummary) {
+                span?.setAttribute("output.reasoning_summary", evt.reasoningSummary);
+                emitSpanLog(span, evt.reasoningSummary, { "openclaw.kind": "reasoning_summary" });
+              }
+              if (evt.usage) {
+                const attrs: Record<string, string | number | boolean> = {};
+                if (evt.usage.input != null) attrs["openclaw.tokens.input"] = evt.usage.input;
+                if (evt.usage.output != null) attrs["openclaw.tokens.output"] = evt.usage.output;
+                if (evt.usage.total != null) attrs["openclaw.tokens.total"] = evt.usage.total;
+                // Also map to gen_ai usage keys so Weave can normalize token usage.
+                if (evt.usage.input != null) attrs["gen_ai.usage.prompt_tokens"] = evt.usage.input;
+                if (evt.usage.output != null)
+                  attrs["gen_ai.usage.completion_tokens"] = evt.usage.output;
+                if (evt.usage.total != null) attrs["llm.usage.total_tokens"] = evt.usage.total;
+                span?.setAttributes(attrs);
+              }
+              span?.end();
+              if (stack?.length) {
+                stack.pop();
+                if (stack.length === 0) {
+                  activeLlmSpans.delete(spanKey);
+                }
+              }
+              return;
+            }
+
+            case "trace.tool": {
+              if (!tracesEnabled) {
+                return;
+              }
+              const runId = evt.runId;
+              const spanKey = keyForTurn(evt.sessionKey, runId);
+              const parent = activeTurnSpans.get(spanKey);
+              const toolSpanKey = evt.toolCallId ? `${spanKey}::${evt.toolCallId}` : undefined;
+              if (evt.phase === "start") {
+                const span = tracer.startSpan(
+                  `openclaw.tool.call`,
+                  {
+                    attributes: {
+                      // Weave Threads propagation (helps some UIs/indexers)
+                      "wandb.thread_id": evt.sessionKey ?? "unknown",
+
+                      thread_id: evt.sessionKey ?? "unknown",
+                      turn_id: runId ?? "unknown",
+                      "tool.name": evt.toolName,
+                      "openclaw.toolCallId": evt.toolCallId ?? "unknown",
+                    },
+                  },
+                  parent ? trace.setSpan(context.active(), parent) : undefined,
+                );
+                if (toolSpanKey) {
+                  activeToolSpans.set(toolSpanKey, span);
+                }
+                if (evt.args != null) {
+                  const argsJson = safeJson(evt.args);
+                  // Populate Weave inputs for tool calls.
+                  span.setAttribute("input.tool_args", argsJson);
+                  emitSpanLog(span, argsJson, { "openclaw.kind": "tool_args" });
+                }
+                return;
+              }
+              const span = toolSpanKey ? activeToolSpans.get(toolSpanKey) : undefined;
+              if (evt.result != null) {
+                const resultJson = safeJson(evt.result);
+                span?.setAttribute("output.tool_result", resultJson);
+                emitSpanLog(span, resultJson, { "openclaw.kind": "tool_result" });
+              }
+              if (evt.error) {
+                span?.setAttribute("output.tool_error", evt.error);
+                emitSpanLog(span, evt.error, { "openclaw.kind": "tool_error" });
+                span?.setStatus({ code: SpanStatusCode.ERROR, message: "tool error" });
+              }
+              if (typeof evt.durationMs === "number") {
+                span?.setAttribute("openclaw.durationMs", evt.durationMs);
+              }
+              span?.end();
+              if (toolSpanKey) {
+                activeToolSpans.delete(toolSpanKey);
+              }
+              return;
+            }
           }
         } catch (err) {
           ctx.logger.error(

@@ -40,9 +40,7 @@ export default defineConfig(() => {
       strictPort: true,
       // Allow access via Tailscale Serve / MagicDNS hostname.
       // Vite blocks unknown hosts by default to prevent DNS rebinding.
-      allowedHosts: [
-        "omen.tail64e79a.ts.net",
-      ],
+      allowedHosts: ["omen.tail64e79a.ts.net"],
       // Ensure HMR works when accessing the dev server through Tailscale Serve
       // (external HTTPS origin) instead of direct localhost:5173.
       hmr: {

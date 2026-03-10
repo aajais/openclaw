@@ -151,6 +151,55 @@ export type DiagnosticToolLoopEvent = DiagnosticBaseEvent & {
   pairedToolName?: string;
 };
 
+export type DiagnosticTraceTurnEvent = DiagnosticBaseEvent & {
+  type: "trace.turn";
+  sessionKey?: string;
+  sessionId?: string;
+  runId: string;
+  phase: "start" | "end";
+  channel?: string;
+  messageId?: number | string;
+  chatId?: number | string;
+  /** Redacted, human-readable inbound message text (optional). */
+  inputText?: string;
+};
+
+export type DiagnosticTraceLlmEvent = DiagnosticBaseEvent & {
+  type: "trace.llm";
+  sessionKey?: string;
+  sessionId?: string;
+  runId: string;
+  phase: "input" | "output";
+  provider?: string;
+  model?: string;
+  systemPrompt?: string;
+  prompt?: string;
+  outputText?: string;
+  reasoningSummary?: string;
+  usage?: {
+    input?: number;
+    output?: number;
+    cacheRead?: number;
+    cacheWrite?: number;
+    total?: number;
+  };
+  stopReason?: string;
+};
+
+export type DiagnosticTraceToolEvent = DiagnosticBaseEvent & {
+  type: "trace.tool";
+  sessionKey?: string;
+  sessionId?: string;
+  runId?: string;
+  phase: "start" | "end";
+  toolName: string;
+  toolCallId?: string;
+  args?: unknown;
+  result?: unknown;
+  error?: string;
+  durationMs?: number;
+};
+
 export type DiagnosticEventPayload =
   | DiagnosticUsageEvent
   | DiagnosticWebhookReceivedEvent
@@ -164,7 +213,10 @@ export type DiagnosticEventPayload =
   | DiagnosticLaneDequeueEvent
   | DiagnosticRunAttemptEvent
   | DiagnosticHeartbeatEvent
-  | DiagnosticToolLoopEvent;
+  | DiagnosticToolLoopEvent
+  | DiagnosticTraceTurnEvent
+  | DiagnosticTraceLlmEvent
+  | DiagnosticTraceToolEvent;
 
 export type DiagnosticEventInput = DiagnosticEventPayload extends infer Event
   ? Event extends DiagnosticEventPayload

@@ -204,6 +204,23 @@ export const OpenClawSchema = z
           })
           .strict()
           .optional(),
+        trace: z
+          .object({
+            enabled: z.boolean().optional(),
+            includeReasoningSummary: z.boolean().optional(),
+            includePrompts: z.boolean().optional(),
+            includeToolArgs: z.boolean().optional(),
+            includeToolOutputs: z.boolean().optional(),
+          })
+          .strict()
+          .optional(),
+        weaveNative: z
+          .object({
+            enabled: z.boolean().optional(),
+            project: z.string().optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),

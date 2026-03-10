@@ -1,4 +1,6 @@
 import type { ToolLoopDetectionConfig } from "../config/types.tools.js";
+import { emitDiagnosticEvent } from "../infra/diagnostic-events.js";
+import { getActiveRunIdForSession } from "../infra/trace-run-context.js";
 import type { SessionState } from "../logging/diagnostic-session-state.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { getGlobalHookRunner } from "../plugins/hook-runner-global.js";
@@ -10,6 +12,11 @@ export type HookContext = {
   agentId?: string;
   sessionKey?: string;
   loopDetection?: ToolLoopDetectionConfig;
+  trace?: {
+    enabled: boolean;
+    includeToolArgs?: boolean;
+    includeToolOutputs?: boolean;
+  };
 };
 
 type HookOutcome = { blocked: true; reason: string } | { blocked: false; params: unknown };
@@ -202,7 +209,27 @@ export function wrapToolWithBeforeToolCallHook(
           }
         }
       }
+
       const normalizedToolName = normalizeToolName(toolName || "tool");
+      const traceEnabled = ctx?.trace?.enabled === true && Boolean(ctx?.sessionKey);
+      const includeArgs = ctx?.trace?.includeToolArgs === true;
+      const includeOutputs = ctx?.trace?.includeToolOutputs === true;
+      const runId = ctx?.sessionKey ? getActiveRunIdForSession(ctx.sessionKey) : undefined;
+
+      const startedAt = Date.now();
+      if (traceEnabled) {
+        emitDiagnosticEvent({
+          type: "trace.tool",
+          phase: "start",
+          sessionKey: ctx?.sessionKey,
+          sessionId: ctx?.agentId,
+          runId,
+          toolName: normalizedToolName,
+          toolCallId,
+          args: includeArgs ? outcome.params : undefined,
+        });
+      }
+
       try {
         const result = await execute(toolCallId, outcome.params, signal, onUpdate);
         await recordLoopOutcome({
@@ -212,6 +239,19 @@ export function wrapToolWithBeforeToolCallHook(
           toolCallId,
           result,
         });
+        if (traceEnabled) {
+          emitDiagnosticEvent({
+            type: "trace.tool",
+            phase: "end",
+            sessionKey: ctx?.sessionKey,
+            sessionId: ctx?.agentId,
+            runId,
+            toolName: normalizedToolName,
+            toolCallId,
+            result: includeOutputs ? result : undefined,
+            durationMs: Date.now() - startedAt,
+          });
+        }
         return result;
       } catch (err) {
         await recordLoopOutcome({
@@ -221,6 +261,19 @@ export function wrapToolWithBeforeToolCallHook(
           toolCallId,
           error: err,
         });
+        if (traceEnabled) {
+          emitDiagnosticEvent({
+            type: "trace.tool",
+            phase: "end",
+            sessionKey: ctx?.sessionKey,
+            sessionId: ctx?.agentId,
+            runId,
+            toolName: normalizedToolName,
+            toolCallId,
+            error: err instanceof Error ? (err.stack ?? err.message) : String(err),
+            durationMs: Date.now() - startedAt,
+          });
+        }
         throw err;
       }
     },

@@ -2,6 +2,7 @@ import type { AgentEvent, AgentMessage } from "@mariozechner/pi-agent-core";
 import { parseReplyDirectives } from "../auto-reply/reply/reply-directives.js";
 import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { emitAgentEvent } from "../infra/agent-events.js";
+import { enqueueWeaveEvent } from "../infra/weave-buffer.js";
 import { createInlineCodeState } from "../markdown/code-spans.js";
 import {
   isMessagingToolDuplicateNormalized,
@@ -282,6 +283,22 @@ export function handleMessageEnd(
       ? extractAssistantThinking(assistantMessage) || extractThinkingFromTaggedText(rawText)
       : "";
   const formattedReasoning = rawThinking ? formatReasoningMessage(rawThinking) : "";
+
+  // Weave tracing: enqueue during streaming; flush inside the turn op so we get a proper trace tree.
+  if (ctx.params.weaveReady && ctx.params.sessionKey) {
+    const traceCfg = ctx.params.config?.diagnostics?.trace;
+    const includePrompts = traceCfg?.includePrompts === true;
+    const includeReasoningSummary = traceCfg?.includeReasoningSummary === true;
+    enqueueWeaveEvent(ctx.params.runId, {
+      kind: "llm",
+      sessionKey: ctx.params.sessionKey,
+      runId: ctx.params.runId,
+      prompt: includePrompts ? ctx.params.turnPrompt : undefined,
+      outputText: rawText,
+      reasoningSummary: includeReasoningSummary ? formattedReasoning : undefined,
+      usage: (assistantMessage as { usage?: unknown }).usage,
+    });
+  }
   const trimmedText = text.trim();
   const parsedText = trimmedText ? parseReplyDirectives(stripTrailingDirective(trimmedText)) : null;
   let cleanedText = parsedText?.text ?? "";

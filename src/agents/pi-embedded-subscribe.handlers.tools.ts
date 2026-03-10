@@ -1,5 +1,6 @@
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
 import { emitAgentEvent } from "../infra/agent-events.js";
+import { enqueueWeaveEvent } from "../infra/weave-buffer.js";
 import { getGlobalHookRunner } from "../plugins/hook-runner-global.js";
 import type { PluginHookAfterToolCallEvent } from "../plugins/types.js";
 import { normalizeTextForComparison } from "./pi-embedded-helpers.js";
@@ -394,6 +395,28 @@ export async function handleToolExecutionEnd(
       result: sanitizedResult,
     },
   });
+
+  // Weave tracing: enqueue during streaming; flush inside the turn op so we get a proper trace tree.
+  if (ctx.params.weaveReady && ctx.params.sessionKey) {
+    const traceCfg = ctx.params.config?.diagnostics?.trace;
+    const includeToolArgs = traceCfg?.includeToolArgs === true;
+    const includeToolOutputs = traceCfg?.includeToolOutputs === true;
+    const errorMessage = isToolError ? extractToolErrorMessage(sanitizedResult) : undefined;
+    enqueueWeaveEvent(ctx.params.runId, {
+      kind: "tool",
+      sessionKey: ctx.params.sessionKey,
+      runId: ctx.params.runId,
+      toolName,
+      toolCallId,
+      toolArgs: includeToolArgs ? startData?.args : undefined,
+      output: includeToolOutputs
+        ? sanitizedResult
+        : {
+            ok: !isToolError,
+            error: errorMessage,
+          },
+    });
+  }
   void ctx.params.onAgentEvent?.({
     stream: "tool",
     data: {

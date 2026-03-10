@@ -325,6 +325,17 @@
     text-overflow: ellipsis;
   }
 
+  /* On touch devices there's no hover; always show chat actions */
+  .chat-sessions__actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Give pills space for menu */
+  .chat-sessions__item {
+    padding-right: 60px;
+  }
+
   .chat-msg {
     max-width: 90%;
   }

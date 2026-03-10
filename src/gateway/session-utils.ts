@@ -38,7 +38,10 @@ import {
   resolveAvatarMime,
 } from "../shared/avatar-policy.js";
 import { normalizeSessionDeliveryFields } from "../utils/delivery-context.js";
-import { readSessionCreatedAtMs, readSessionTitleFieldsFromTranscript } from "./session-utils.fs.js";
+import {
+  readSessionCreatedAtMs,
+  readSessionTitleFieldsFromTranscript,
+} from "./session-utils.fs.js";
 import type {
   GatewayAgentRow,
   GatewaySessionRow,

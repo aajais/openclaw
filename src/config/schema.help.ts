@@ -31,6 +31,23 @@ export const FIELD_HELP: Record<string, string> = {
     "OpenTelemetry export settings for traces, metrics, and logs emitted by gateway components. Use this when integrating with centralized observability backends and distributed tracing pipelines.",
   "diagnostics.cacheTrace":
     "Cache-trace logging settings for observing cache decisions and payload context in embedded runs. Enable this temporarily for debugging and disable afterward to reduce sensitive log footprint.",
+  "diagnostics.trace":
+    "High-fidelity per-turn tracing for conversation threads (Weave-style threads/turns) including prompts, tool calls, tool outputs, and optional reasoning summaries. Enable only when you want deep observability; payload volume and sensitivity can be high.",
+  "diagnostics.trace.enabled":
+    "Enable per-turn tracing export. When disabled, OpenClaw emits only baseline diagnostic telemetry.",
+  "diagnostics.trace.includeReasoningSummary":
+    "Include an explicit reasoning summary (not hidden chain-of-thought) as OTEL logs attached to the turn span.",
+  "diagnostics.trace.includePrompts":
+    "Include full system prompt + per-turn prompt content as OTEL logs attached to the LLM/turn spans.",
+  "diagnostics.trace.includeToolArgs":
+    "Include tool call arguments as OTEL logs attached to tool spans.",
+  "diagnostics.trace.includeToolOutputs":
+    "Include tool outputs/results as OTEL logs attached to tool spans.",
+  "diagnostics.weaveNative.enabled":
+    "Enable W&B Weave TypeScript SDK logging for threads/turns (native Weave calls, not OTEL-derived).",
+  "diagnostics.weaveNative.project":
+    "Weave project id, e.g. 'entity/project'. If omitted, uses env WEAVE_PROJECT.",
+
   logging:
     "Logging behavior controls for severity, output destinations, formatting, and sensitive-data redaction. Keep levels and redaction strict enough for production while preserving useful diagnostics.",
   "logging.level":

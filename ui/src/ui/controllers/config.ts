@@ -1,8 +1,8 @@
 import type { GatewayBrowserClient } from "../gateway.ts";
+import { parseJson5Object } from "../json5-parse.ts";
 import type { ConfigSchemaResponse, ConfigSnapshot, ConfigUiHints } from "../types.ts";
 import type { JsonSchema } from "../views/config-form.shared.ts";
 import { coerceFormValues } from "./config/form-coerce.ts";
-import { parseJson5Object } from "../json5-parse.ts";
 import {
   cloneConfigObject,
   removePathValue,

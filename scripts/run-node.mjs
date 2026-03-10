@@ -220,6 +220,58 @@ export async function runNodeMain(params = {}) {
     platform: params.platform ?? process.platform,
   };
 
+  // Optional dotenv support (dev/local).
+  // - If OPENCLAW_DOTENV_PATH is set, load that.
+  // - If running with --dev and no explicit dotenv path, best-effort load ../openclaw.dev.env
+  //   (workspace root next to openclaw-src).
+  // This is intentionally best-effort: missing/invalid dotenv should not block startup.
+  try {
+    const isDevMode = deps.args.includes("--dev");
+    const explicitDotenvPath = (deps.env.OPENCLAW_DOTENV_PATH ?? "").trim();
+    const defaultDotenvPath = isDevMode ? path.join(deps.cwd, "..", "openclaw.dev.env") : "";
+    const dotenvPath = explicitDotenvPath || defaultDotenvPath;
+    if (dotenvPath) {
+      try {
+        if (!deps.fs.existsSync(dotenvPath)) {
+          // ignore missing default dotenv
+        } else {
+          const { config } = await import("dotenv");
+          config({ path: dotenvPath, override: false });
+        }
+      } catch {
+        // ignore
+      }
+      // Pull any newly loaded vars into the runner env.
+      deps.env = { ...process.env, ...deps.env };
+    }
+  } catch {
+    // ignore
+  }
+
+  // Weave/W&B SDKs expect WANDB_API_KEY in the process env.
+  // If it isn't present, best-effort fall back to the configured W&B provider apiKey
+  // (wandb_v1_...) so Weave native + W&B MCP can authenticate.
+  try {
+    const hasWandbKey = Boolean((deps.env.WANDB_API_KEY ?? "").trim());
+    if (!hasWandbKey) {
+      const isDevMode = deps.args.includes("--dev");
+      const homeDir = (deps.env.OPENCLAW_HOME ?? deps.env.HOME ?? "").trim();
+      const openclawHome = homeDir ? path.join(homeDir, ".openclaw") : null;
+      const cfgPath =
+        isDevMode && openclawHome ? path.join(openclawHome, "openclaw.dev.json") : null;
+      if (cfgPath && deps.fs.existsSync(cfgPath)) {
+        const raw = deps.fs.readFileSync(cfgPath, "utf8");
+        const cfg = JSON.parse(raw);
+        const apiKey = cfg?.models?.providers?.wandb?.apiKey;
+        if (typeof apiKey === "string" && apiKey.trim()) {
+          deps.env.WANDB_API_KEY = apiKey.trim();
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+
   deps.distRoot = path.join(deps.cwd, "dist");
   deps.distEntry = path.join(deps.distRoot, "/entry.js");
   deps.buildStampPath = path.join(deps.distRoot, ".buildstamp");
@@ -231,9 +283,23 @@ export async function runNodeMain(params = {}) {
   }
 
   logRunner("Building TypeScript (dist is stale).", deps);
-  const buildCmd = deps.platform === "win32" ? "cmd.exe" : "pnpm";
+  // Remove entry outputs that tsdown's shebang plugin will chmod so they are recreated
+  // with current user ownership (avoids EPERM when dist was created by another user, e.g. root).
+  if (deps.platform !== "win32") {
+    for (const name of ["index.js", "entry.js"]) {
+      try {
+        deps.fs.unlinkSync(path.join(deps.distRoot, name));
+      } catch {
+        // ignore missing or other errors
+      }
+    }
+  }
+  const tsdownRunPath = path.join(deps.cwd, "node_modules", "tsdown", "dist", "run.mjs");
+  const buildCmd = deps.platform === "win32" ? "cmd.exe" : deps.execPath;
   const buildArgs =
-    deps.platform === "win32" ? ["/d", "/s", "/c", "pnpm", ...compilerArgs] : compilerArgs;
+    deps.platform === "win32"
+      ? ["/d", "/s", "/c", "pnpm", ...compilerArgs]
+      : [tsdownRunPath, "--no-clean"];
   const build = deps.spawn(buildCmd, buildArgs, {
     cwd: deps.cwd,
     env: deps.env,
