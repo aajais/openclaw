@@ -381,6 +381,16 @@
     border-radius: var(--radius-md);
   }
 
+  /* Mobile: center the sender/time row vertically (avoid baseline pushing name up) */
+  .chat-group-footer {
+    align-items: center;
+  }
+
+  .chat-sender-name,
+  .chat-group-timestamp {
+    line-height: 1.2;
+  }
+
   .chat-compose {
     gap: 8px;
   }
