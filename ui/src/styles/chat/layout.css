@@ -452,6 +452,11 @@
     grid-template-columns: 1fr;
   }
 
+  /* iOS Safari zooms inputs/textareas with font-size < 16px */
+  .chat-compose .chat-compose__field textarea {
+    font-size: 16px;
+  }
+
   /* Mobile: stack compose row vertically */
   .chat-compose__row {
     flex-direction: column;
