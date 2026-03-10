@@ -13,6 +13,7 @@ import {
 import { handleAgentEvent, resetToolStream, type AgentEventPayload } from "./app-tool-stream.ts";
 import type { OpenClawApp } from "./app.ts";
 import { shouldReloadHistoryForFinalEvent } from "./chat-event-reload.ts";
+import { clearChatSessionRunId } from "./chat-session-cache.ts";
 import { loadAgents, loadToolsCatalog } from "./controllers/agents.ts";
 import { loadAssistantIdentity } from "./controllers/assistant-identity.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
@@ -232,6 +233,11 @@ function handleTerminalChatEvent(
   }
   resetToolStream(chatHost as Parameters<typeof resetToolStream>[0]);
   void flushChatQueueForEvent(chatHost as Parameters<typeof flushChatQueueForEvent>[0]);
+
+  // Clear persisted run marker once the gateway reports completion.
+  const sessionKey =
+    typeof payload?.sessionKey === "string" ? payload.sessionKey : mainHost.sessionKey;
+  clearChatSessionRunId(sessionKey);
   const runId = payload?.runId;
   const refreshSet = (chatHost as { refreshSessionsAfterChat?: Set<string> })
     .refreshSessionsAfterChat;

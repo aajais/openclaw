@@ -54,6 +54,7 @@ import {
 } from "./app-tool-stream.ts";
 import type { AppViewState } from "./app-view-state.ts";
 import { normalizeAssistantIdentity } from "./assistant-identity.ts";
+import { loadChatSessionCache, saveChatSessionCache } from "./chat-session-cache.ts";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
 import { abortChatRun } from "./controllers/chat.ts";
 import type { CronFieldErrors } from "./controllers/cron.ts";
@@ -148,6 +149,20 @@ export class OpenClawApp extends LitElement {
     super();
     if (isSupportedLocale(this.settings.locale)) {
       void i18n.setLocale(this.settings.locale);
+    }
+
+    // Restore minimal chat state (draft/queue/runId) across hard refresh.
+    const cached = loadChatSessionCache(this.settings.sessionKey);
+    if (cached) {
+      if (typeof cached.draft === "string") {
+        this.chatMessage = cached.draft;
+      }
+      if (Array.isArray(cached.queue)) {
+        this.chatQueue = cached.queue.map((item) => ({ ...item }));
+      }
+      if (typeof cached.runId === "string") {
+        this.chatRunId = cached.runId;
+      }
     }
   }
   @state() password = "";
@@ -723,6 +738,18 @@ export class OpenClawApp extends LitElement {
     store.toolStreamById = this.toolStreamById;
     store.toolStreamOrder = this.toolStreamOrder;
     store.toolStreamSyncTimer = this.toolStreamSyncTimer;
+
+    // Persist minimal state across hard refresh (text-only queue, draft, and runId).
+    saveChatSessionCache(this.sessionKey, {
+      draft: this.chatMessage,
+      queue: (this.chatQueue ?? []).map((item) => ({
+        id: item.id,
+        text: item.text,
+        createdAt: item.createdAt,
+        refreshSessions: item.refreshSessions,
+      })),
+      runId: this.chatRunId,
+    });
   }
 
   private loadActiveChatFromStore(key: string) {
@@ -745,6 +772,20 @@ export class OpenClawApp extends LitElement {
     this.toolStreamById = store.toolStreamById;
     this.toolStreamOrder = store.toolStreamOrder;
     this.toolStreamSyncTimer = store.toolStreamSyncTimer;
+
+    // Overlay persisted cache (hard-refresh restore)
+    const cached = loadChatSessionCache(key);
+    if (cached) {
+      if (typeof cached.draft === "string") {
+        this.chatMessage = cached.draft;
+      }
+      if (Array.isArray(cached.queue)) {
+        this.chatQueue = cached.queue.map((item) => ({ ...item }));
+      }
+      if (typeof cached.runId === "string") {
+        this.chatRunId = cached.runId;
+      }
+    }
   }
 
   updateChatDraft(next: string) {
