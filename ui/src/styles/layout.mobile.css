@@ -342,22 +342,23 @@
   /* Mobile ergonomics: keep ~44px hit area but reduce visual weight */
   .chat-sessions__menuTrigger,
   .chat-sessions__stop {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    min-height: 32px;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    min-height: 18px;
     padding: 0;
+    border-radius: 999px;
   }
 
-  /* Ensure minimum tap target via padding on the container, not the button itself */
+  /* Keep a generous tap target via padding on the container, not the button itself */
   .chat-sessions__actions {
-    padding: 6px;
+    padding: 13px;
   }
 
   .chat-sessions__menuTrigger svg,
   .chat-sessions__stop svg {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
   }
 
   .chat-sessions__menuTrigger:focus-visible,

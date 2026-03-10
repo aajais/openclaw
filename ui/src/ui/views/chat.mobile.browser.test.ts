@@ -30,8 +30,8 @@ describe("chat mobile layout", () => {
     if (menuTrigger) {
       const r = menuTrigger.getBoundingClientRect();
       // Visual size can be smaller than the tap target; the container adds padding.
-      expect(r.width).toBeGreaterThanOrEqual(28);
-      expect(r.height).toBeGreaterThanOrEqual(28);
+      expect(r.width).toBeGreaterThanOrEqual(16);
+      expect(r.height).toBeGreaterThanOrEqual(16);
     }
   });
 });
