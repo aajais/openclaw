@@ -350,9 +350,9 @@
     border-radius: 999px;
   }
 
-  /* Keep a generous tap target via padding on the container, not the button itself */
+  /* Smaller tap target (Aj request): still usable, but less visually/spacing heavy */
   .chat-sessions__actions {
-    padding: 13px;
+    padding: 6px;
   }
 
   .chat-sessions__menuTrigger svg,
