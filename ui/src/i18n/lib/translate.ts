@@ -9,42 +9,53 @@ export function isSupportedLocale(value: string | null | undefined): value is Lo
   return value !== null && value !== undefined && SUPPORTED_LOCALES.includes(value as Locale);
 }
 
-class I18nManager {
-  private locale: Locale = "en";
-  private translations: Record<Locale, TranslationMap> = { en } as Record<Locale, TranslationMap>;
-  private subscribers: Set<Subscriber> = new Set();
-
-  constructor() {
-    this.loadLocale();
-  }
-
-  private resolveInitialLocale(): Locale {
-    const saved = localStorage.getItem("openclaw.i18n.locale");
+function resolveStartupLocale(): Locale {
+  try {
+    const saved = globalThis.localStorage?.getItem?.("openclaw.i18n.locale") ?? null;
     if (isSupportedLocale(saved)) {
       return saved;
     }
-    const navLang = navigator.language;
-    if (navLang.startsWith("zh")) {
-      return navLang === "zh-TW" || navLang === "zh-HK" ? "zh-TW" : "zh-CN";
-    }
-    if (navLang.startsWith("pt")) {
-      return "pt-BR";
-    }
-    return "en";
+  } catch {
+    // ignore storage access failures
   }
 
-  private loadLocale() {
-    const initialLocale = this.resolveInitialLocale();
-    if (initialLocale === "en") {
-      this.locale = "en";
-      return;
+  const navLang = globalThis.navigator?.language ?? "en";
+  if (navLang.startsWith("zh")) {
+    return navLang === "zh-TW" || navLang === "zh-HK" ? "zh-TW" : "zh-CN";
+  }
+  if (navLang.startsWith("pt")) {
+    return "pt-BR";
+  }
+  return "en";
+}
+
+class I18nManager {
+  private locale: Locale;
+  private translations: Record<Locale, TranslationMap> = { en } as Record<Locale, TranslationMap>;
+  private subscribers: Set<Subscriber> = new Set();
+
+  constructor(initialLocale: Locale) {
+    this.locale = initialLocale;
+    if (initialLocale !== "en") {
+      // Fire and forget; locale is already set synchronously.
+      void this.setLocale(initialLocale);
     }
-    // Use the normal locale setter so startup locale loading follows the same
-    // translation-loading + notify path as manual locale changes.
-    void this.setLocale(initialLocale);
   }
 
   public getLocale(): Locale {
+    // In some environments (notably tests), module resets can be imperfect.
+    // Treat localStorage as source-of-truth when a supported value is present.
+    try {
+      const saved = globalThis.localStorage?.getItem?.("openclaw.i18n.locale") ?? null;
+      if (isSupportedLocale(saved) && saved !== this.locale) {
+        this.locale = saved;
+        if (!this.translations[saved]) {
+          void this.setLocale(saved);
+        }
+      }
+    } catch {
+      // ignore
+    }
     return this.locale;
   }
 
@@ -130,5 +141,5 @@ class I18nManager {
   }
 }
 
-export const i18n = new I18nManager();
+export const i18n = new I18nManager(resolveStartupLocale());
 export const t = (key: string, params?: Record<string, string>) => i18n.t(key, params);

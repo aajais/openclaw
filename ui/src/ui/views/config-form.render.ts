@@ -283,22 +283,23 @@ function matchesSearch(params: {
   schema: JsonSchema;
   sectionValue: unknown;
   uiHints: ConfigUiHints;
-  query: string;
+  criteria: ConfigSearchCriteria;
 }): boolean {
-  if (!params.query) {
+  const criteria = params.criteria;
+  if (!criteria.text && criteria.tags.length === 0) {
     return true;
   }
-  const criteria = parseConfigSearchQuery(params.query);
+
   const q = criteria.text;
   const meta = SECTION_META[params.key];
 
-  // Check key name
-  if (q && params.key.toLowerCase().includes(q)) {
+  // Check key name (only when no tag filter is active)
+  if (criteria.tags.length === 0 && q && params.key.toLowerCase().includes(q)) {
     return true;
   }
 
-  // Check label and description
-  if (q && meta) {
+  // Check label and description (only when no tag filter is active)
+  if (criteria.tags.length === 0 && q && meta) {
     if (meta.label.toLowerCase().includes(q)) {
       return true;
     }
@@ -356,7 +357,7 @@ export function renderConfigForm(props: ConfigFormProps) {
         schema: node,
         sectionValue: value[key],
         uiHints: props.uiHints,
-        query: searchQuery,
+        criteria: searchCriteria,
       })
     ) {
       return false;

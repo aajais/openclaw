@@ -89,13 +89,12 @@ describe("openExternalUrlSafe", () => {
     const openedLikeProxy = {
       opener: { postMessage: () => void 0 },
     } as unknown as WindowProxy;
-    const openMock = vi.fn(() => openedLikeProxy);
-    vi.stubGlobal("window", {
-      location: { href: "https://openclaw.ai/chat" },
-      open: openMock,
-    } as unknown as Window & typeof globalThis);
 
-    const opened = openExternalUrlSafe("https://example.com/safe.png");
+    const openMock = vi.spyOn(window, "open").mockReturnValue(openedLikeProxy);
+
+    const opened = openExternalUrlSafe("https://example.com/safe.png", {
+      baseHref: "https://openclaw.ai/chat",
+    });
 
     expect(openMock).toHaveBeenCalledWith(
       "https://example.com/safe.png",

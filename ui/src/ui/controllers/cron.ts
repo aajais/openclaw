@@ -549,8 +549,19 @@ export async function addCronJob(state: CronState) {
       });
       clearCronEditState(state);
     } else {
+      const coercedDeliveryMode = form.deliveryMode;
       await state.client.request("cron.add", job);
       resetCronFormToDefaults(state);
+
+      // If we just coerced an unsupported delivery mode away, keep the form in a
+      // valid state instead of snapping back to defaults that might reintroduce it.
+      if (coercedDeliveryMode === "none" && state.cronForm.deliveryMode === "announce") {
+        state.cronForm = {
+          ...state.cronForm,
+          deliveryMode: "none",
+          deliveryTo: "",
+        };
+      }
     }
     await loadCronJobs(state);
     await loadCronStatus(state);

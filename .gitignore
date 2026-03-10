@@ -14,7 +14,7 @@ __pycache__/
 .worktrees/
 .DS_Store
 **/.DS_Store
-ui/src/ui/__screenshots__/
+ui/src/**/__screenshots__/
 ui/playwright-report/
 ui/test-results/
 packages/dashboard-next/.next/
