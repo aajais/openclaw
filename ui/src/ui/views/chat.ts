@@ -80,6 +80,8 @@ export type ChatProps = {
   onAbort?: () => void;
   onQueueRemove: (id: string) => void;
   onNewSession: () => void;
+  chatSessionsSort?: "recent" | "name";
+  onChatSessionsSortChange?: (next: "recent" | "name") => void;
   onOpenSidebar?: (content: string) => void;
   onCloseSidebar?: () => void;
   onSplitRatioChange?: (ratio: number) => void;
@@ -361,6 +363,19 @@ export function renderChat(props: ChatProps) {
         <aside class="chat-sessions" aria-label="Chats">
           <div class="chat-sessions__header">
             <div class="chat-sessions__title">Chats</div>
+            <label class="chat-sessions__sort" aria-label="Sort chats">
+              <span class="sr-only">Sort</span>
+              <select
+                .value=${props.chatSessionsSort ?? "recent"}
+                @change=${(e: Event) => {
+                  const next = (e.target as HTMLSelectElement).value === "name" ? "name" : "recent";
+                  props.onChatSessionsSortChange?.(next);
+                }}
+              >
+                <option value="recent">Recent</option>
+                <option value="name">Name</option>
+              </select>
+            </label>
             <button class="btn" type="button" ?disabled=${!props.connected} @click=${props.onNewSession}>
               New
             </button>
@@ -378,6 +393,7 @@ export function renderChat(props: ChatProps) {
                 keys.add(props.sessionKey);
               }
               const ordered = Array.from(keys);
+              const sortMode = props.chatSessionsSort ?? "recent";
               ordered.sort((a, b) => {
                 if (a === props.sessionKey) {
                   return -1;
@@ -385,18 +401,32 @@ export function renderChat(props: ChatProps) {
                 if (b === props.sessionKey) {
                   return 1;
                 }
+
                 const aRow = rowsByKey.get(a);
                 const bRow = rowsByKey.get(b);
-                const aCreated = aRow?.createdAt ?? null;
-                const bCreated = bRow?.createdAt ?? null;
-                if (typeof aCreated === "number" && typeof bCreated === "number") {
-                  return bCreated - aCreated; // newest first
+
+                if (sortMode === "name") {
+                  const aLabel = (aRow?.label ?? a).toLowerCase();
+                  const bLabel = (bRow?.label ?? b).toLowerCase();
+                  const byLabel = aLabel.localeCompare(bLabel);
+                  if (byLabel !== 0) {
+                    return byLabel;
+                  }
+                  return a.localeCompare(b);
                 }
+
                 const aUpdated = aRow?.updatedAt ?? null;
                 const bUpdated = bRow?.updatedAt ?? null;
                 if (typeof aUpdated === "number" && typeof bUpdated === "number") {
                   return bUpdated - aUpdated;
                 }
+
+                const aCreated = aRow?.createdAt ?? null;
+                const bCreated = bRow?.createdAt ?? null;
+                if (typeof aCreated === "number" && typeof bCreated === "number") {
+                  return bCreated - aCreated;
+                }
+
                 return a.localeCompare(b);
               });
               return ordered.map((key) => {

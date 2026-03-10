@@ -32,6 +32,7 @@ export function loadSettings(): UiSettings {
     theme: "system",
     chatFocusMode: false,
     chatShowThinking: true,
+    chatSessionsSort: "recent",
     splitRatio: 0.6,
     navCollapsed: false,
     navGroupsCollapsed: {},
@@ -68,6 +69,10 @@ export function loadSettings(): UiSettings {
         typeof parsed.chatShowThinking === "boolean"
           ? parsed.chatShowThinking
           : defaults.chatShowThinking,
+      chatSessionsSort:
+        parsed.chatSessionsSort === "name" || parsed.chatSessionsSort === "recent"
+          ? parsed.chatSessionsSort
+          : defaults.chatSessionsSort,
       splitRatio:
         typeof parsed.splitRatio === "number" &&
         parsed.splitRatio >= 0.4 &&

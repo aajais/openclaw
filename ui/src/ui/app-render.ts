@@ -1047,6 +1047,13 @@ export function renderApp(state: AppViewState) {
                 canAbort: Boolean(state.chatRunId),
                 onAbort: () => void state.handleAbortChat(),
                 onQueueRemove: (id) => state.removeQueuedMessage(id),
+                chatSessionsSort: state.settings.chatSessionsSort ?? "recent",
+                onChatSessionsSortChange: (next) => {
+                  state.applySettings({
+                    ...state.settings,
+                    chatSessionsSort: next,
+                  });
+                },
                 onNewSession: () => {
                   const nextKey = state.newChatSessionKey();
                   state.switchChatSession(nextKey);
