@@ -122,6 +122,106 @@ describe("gateway e2e", () => {
   );
 
   it(
+    "runs a mock W&B Inference OpenAI-compatible tool call end-to-end via gateway agent loop",
+    { timeout: GATEWAY_E2E_TIMEOUT_MS },
+    async () => {
+      const envSnapshot = captureEnv([
+        "HOME",
+        "OPENCLAW_CONFIG_PATH",
+        "OPENCLAW_GATEWAY_TOKEN",
+        "OPENCLAW_SKIP_CHANNELS",
+        "OPENCLAW_SKIP_GMAIL_WATCHER",
+        "OPENCLAW_SKIP_CRON",
+        "OPENCLAW_SKIP_CANVAS_HOST",
+        "OPENCLAW_SKIP_BROWSER_CONTROL_SERVER",
+      ]);
+
+      // This test verifies that a third-party OpenAI Responses-compatible endpoint can be
+      // configured as an arbitrary provider (here: wandb) and still support tool calling.
+      const wandbBaseUrl = "https://api.wandb.ai/v1";
+      const { restore } = installOpenAiResponsesMock({ baseUrl: wandbBaseUrl });
+
+      const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-gw-mock-wandb-home-"));
+      process.env.HOME = tempHome;
+      process.env.OPENCLAW_SKIP_CHANNELS = "1";
+      process.env.OPENCLAW_SKIP_GMAIL_WATCHER = "1";
+      process.env.OPENCLAW_SKIP_CRON = "1";
+      process.env.OPENCLAW_SKIP_CANVAS_HOST = "1";
+      process.env.OPENCLAW_SKIP_BROWSER_CONTROL_SERVER = "1";
+
+      const token = `test-${randomUUID()}`;
+      process.env.OPENCLAW_GATEWAY_TOKEN = token;
+
+      const workspaceDir = path.join(tempHome, "openclaw");
+      await fs.mkdir(workspaceDir, { recursive: true });
+
+      const nonceA = randomUUID();
+      const nonceB = randomUUID();
+      const toolProbePath = path.join(workspaceDir, `.openclaw-tool-probe.${nonceA}.txt`);
+      await fs.writeFile(toolProbePath, `nonceA=${nonceA}\nnonceB=${nonceB}\n`);
+
+      const configDir = path.join(tempHome, ".openclaw");
+      await fs.mkdir(configDir, { recursive: true });
+      const configPath = path.join(configDir, "openclaw.json");
+
+      const cfg = {
+        agents: { defaults: { workspace: workspaceDir } },
+        models: {
+          mode: "replace",
+          providers: {
+            wandb: buildOpenAiResponsesProviderConfig(wandbBaseUrl),
+          },
+        },
+        gateway: { auth: { token } },
+      };
+
+      const { server, client } = await startGatewayWithClient({
+        cfg,
+        configPath,
+        token,
+        clientDisplayName: "vitest-mock-wandb",
+      });
+
+      try {
+        const sessionKey = "agent:dev:mock-wandb";
+
+        await client.request("sessions.patch", {
+          key: sessionKey,
+          model: "wandb/gpt-5.2",
+        });
+
+        const runId = randomUUID();
+        const payload = await client.request<{
+          status?: unknown;
+          result?: unknown;
+        }>(
+          "agent",
+          {
+            sessionKey,
+            idempotencyKey: `idem-${runId}`,
+            message:
+              `Call the read tool on "${toolProbePath}". ` +
+              `Then reply with exactly: ${nonceA} ${nonceB}. No extra text.`,
+            deliver: false,
+          },
+          { expectFinal: true },
+        );
+
+        expect(payload?.status).toBe("ok");
+        const text = extractPayloadText(payload?.result);
+        expect(text).toContain(nonceA);
+        expect(text).toContain(nonceB);
+      } finally {
+        client.stop();
+        await server.close({ reason: "mock wandb test complete" });
+        await fs.rm(tempHome, { recursive: true, force: true });
+        restore();
+        envSnapshot.restore();
+      }
+    },
+  );
+
+  it(
     "runs wizard over ws and writes auth token config",
     { timeout: GATEWAY_E2E_TIMEOUT_MS },
     async () => {
