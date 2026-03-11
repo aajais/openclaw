@@ -129,6 +129,24 @@ export async function applySessionsPatchToStore(params: {
     }
   }
 
+  if ("category" in patch) {
+    const raw = patch.category;
+    if (raw === null) {
+      delete next.category;
+    } else if (raw !== undefined) {
+      const normalized = String(raw).trim().toLowerCase();
+      if (
+        normalized !== "personal" &&
+        normalized !== "dev" &&
+        normalized !== "informational" &&
+        normalized !== "other"
+      ) {
+        return invalid('invalid category (use "personal"|"dev"|"informational"|"other")');
+      }
+      next.category = normalized as typeof next.category;
+    }
+  }
+
   if ("label" in patch) {
     const raw = patch.label;
     if (raw === null) {

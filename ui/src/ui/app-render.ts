@@ -1067,6 +1067,10 @@ export function renderApp(state: AppViewState) {
                   });
                 },
                 onChatSessionCategoryChange: (sessionKey, category) => {
+                  // Prefer backend persistence.
+                  void patchSession(state, sessionKey, { category });
+
+                  // Also cache locally for immediate UI feedback / older gateways.
                   const nextMap = {
                     ...state.settings.chatSessionCategories,
                     [sessionKey]: category,

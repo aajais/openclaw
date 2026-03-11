@@ -413,6 +413,7 @@ export type GatewaySessionRow = {
   key: string;
   kind: "direct" | "group" | "global" | "unknown";
   label?: string;
+  category?: import("./storage.ts").ChatCategory;
   displayName?: string;
   surface?: string;
   subject?: string;

@@ -65,6 +65,8 @@ export type AcpSessionRuntimeOptions = {
   backendExtras?: Record<string, string>;
 };
 
+export type SessionCategory = "personal" | "dev" | "informational" | "other";
+
 export type SessionEntry = {
   /**
    * Last delivered heartbeat payload (used to suppress duplicate heartbeat notifications).
@@ -149,6 +151,8 @@ export type SessionEntry = {
   cliSessionIds?: Record<string, string>;
   claudeCliSessionId?: string;
   label?: string;
+  /** User-defined category/tag for UI organization. */
+  category?: SessionCategory;
   displayName?: string;
   channel?: string;
   groupId?: string;

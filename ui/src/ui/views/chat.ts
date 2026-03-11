@@ -431,7 +431,7 @@ export function renderChat(props: ChatProps) {
                 const row = rowsByKey.get(key);
                 const label = row?.label ? row.label : key;
                 const badge = badges[key];
-                const category = props.chatSessionCategories?.[key] ?? "other";
+                const category = row?.category ?? props.chatSessionCategories?.[key] ?? "other";
                 return html`
                   <div
                     class="chat-sessions__item chat-sessions__item--cat-${category} ${key === props.sessionKey ? "chat-sessions__item--active" : ""}"

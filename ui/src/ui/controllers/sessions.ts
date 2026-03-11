@@ -65,6 +65,7 @@ export async function patchSession(
     thinkingLevel?: string | null;
     verboseLevel?: string | null;
     reasoningLevel?: string | null;
+    category?: import("../storage.ts").ChatCategory | null;
   },
 ) {
   if (!state.client || !state.connected) {
@@ -82,6 +83,9 @@ export async function patchSession(
   }
   if ("reasoningLevel" in patch) {
     params.reasoningLevel = patch.reasoningLevel;
+  }
+  if ("category" in patch) {
+    params.category = patch.category;
   }
   try {
     await state.client.request("sessions.patch", params);

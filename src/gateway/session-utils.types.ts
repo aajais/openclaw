@@ -12,6 +12,7 @@ export type GatewaySessionRow = {
   key: string;
   kind: "direct" | "group" | "global" | "unknown";
   label?: string;
+  category?: SessionEntry["category"];
   displayName?: string;
   derivedTitle?: string;
   lastMessagePreview?: string;
