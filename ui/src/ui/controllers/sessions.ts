@@ -91,18 +91,24 @@ export async function patchSession(
   }
 }
 
-export async function deleteSession(state: SessionsState, key: string): Promise<boolean> {
+export async function deleteSession(
+  state: SessionsState,
+  key: string,
+  opts?: { skipConfirm?: boolean },
+): Promise<boolean> {
   if (!state.client || !state.connected) {
     return false;
   }
   if (state.sessionsLoading) {
     return false;
   }
-  const confirmed = window.confirm(
-    `Delete session "${key}"?\n\nDeletes the session entry and archives its transcript.`,
-  );
-  if (!confirmed) {
-    return false;
+  if (!opts?.skipConfirm) {
+    const confirmed = window.confirm(
+      `Delete session "${key}"?\n\nDeletes the session entry and archives its transcript.`,
+    );
+    if (!confirmed) {
+      return false;
+    }
   }
   state.sessionsLoading = true;
   state.sessionsError = null;
@@ -117,8 +123,12 @@ export async function deleteSession(state: SessionsState, key: string): Promise<
   }
 }
 
-export async function deleteSessionAndRefresh(state: SessionsState, key: string): Promise<boolean> {
-  const deleted = await deleteSession(state, key);
+export async function deleteSessionAndRefresh(
+  state: SessionsState,
+  key: string,
+  opts?: { skipConfirm?: boolean },
+): Promise<boolean> {
+  const deleted = await deleteSession(state, key, opts);
   if (!deleted) {
     return false;
   }

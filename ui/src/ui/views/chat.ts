@@ -37,7 +37,7 @@ export type ChatProps = {
   sessionBadges?: Record<string, { running: boolean; error: boolean }>;
   onAbortSession?: (sessionKey: string) => void;
   onRenameSession?: (sessionKey: string, nextLabel: string | null) => void;
-  onDeleteSession?: (sessionKey: string) => void;
+  onDeleteSession?: (sessionKey: string, opts?: { skipConfirm?: boolean }) => void;
   thinkingLevel: string | null;
   showThinking: boolean;
   loading: boolean;
@@ -556,7 +556,16 @@ export function renderChat(props: ChatProps) {
                               (e.currentTarget as HTMLElement)
                                 .closest("details")
                                 ?.removeAttribute("open");
-                              props.onDeleteSession?.(key);
+
+                              // Confirm synchronously in the click handler.
+                              // iOS Safari can block confirm dialogs if they happen after an async hop.
+                              const confirmed = window.confirm(
+                                `Delete session "${key}"?\n\nDeletes the session entry and archives its transcript.`,
+                              );
+                              if (!confirmed) {
+                                return;
+                              }
+                              props.onDeleteSession?.(key, { skipConfirm: true });
                             }}
                           >
                             Delete

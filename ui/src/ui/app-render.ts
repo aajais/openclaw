@@ -1013,8 +1013,8 @@ export function renderApp(state: AppViewState) {
                 onAbortSession: (key) => void state.abortChatSession(key),
                 onRenameSession: (key, nextLabel) =>
                   void patchSession(state, key, { label: nextLabel }),
-                onDeleteSession: async (key) => {
-                  const deleted = await deleteSessionAndRefresh(state, key);
+                onDeleteSession: async (key, opts) => {
+                  const deleted = await deleteSessionAndRefresh(state, key, opts);
                   if (!deleted) {
                     return;
                   }
