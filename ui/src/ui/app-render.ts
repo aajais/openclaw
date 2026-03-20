@@ -2,7 +2,6 @@ import { html, nothing } from "lit";
 import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
 import { t } from "../i18n/index.ts";
 import { refreshChatAvatar } from "./app-chat.ts";
-import { renderUsageTab } from "./app-render-usage-tab.ts";
 import { renderChatControls, renderTab, renderThemeToggle } from "./app-render.helpers.ts";
 import type { AppViewState } from "./app-view-state.ts";
 import { loadAgentFileContent, loadAgentFiles, saveAgentFile } from "./controllers/agent-files.ts";
@@ -70,13 +69,10 @@ import { normalizeBasePath, TAB_GROUPS, subtitleForTab, titleForTab } from "./na
 import { renderAgents } from "./views/agents.ts";
 import { renderChannels } from "./views/channels.ts";
 import { renderChat } from "./views/chat.ts";
-import { renderConfig } from "./views/config.ts";
 import { renderCron } from "./views/cron.ts";
-import { renderDebug } from "./views/debug.ts";
 import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
 import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.ts";
 import { renderInstances } from "./views/instances.ts";
-import { renderLogs } from "./views/logs.ts";
 import { renderNodes } from "./views/nodes.ts";
 import { renderOverview } from "./views/overview.ts";
 import { renderSessions } from "./views/sessions.ts";
@@ -136,6 +132,161 @@ function resolveAssistantAvatarUrl(state: AppViewState): string | undefined {
     return candidate;
   }
   return identity?.avatarUrl;
+}
+
+type LazyRenderKey = "usage" | "config" | "debug" | "logs";
+
+type LazyRenderEntry = {
+  render: ((state: AppViewState) => unknown) | null;
+  loading: Promise<void> | null;
+  load: () => Promise<void>;
+};
+
+const lazyRenderers: Record<LazyRenderKey, LazyRenderEntry> = {
+  usage: {
+    render: null,
+    loading: null,
+    load: async () => {
+      const mod = await import("./app-render-usage-tab.ts");
+      lazyRenderers.usage.render = mod.renderUsageTab as (state: AppViewState) => unknown;
+    },
+  },
+  config: {
+    render: null,
+    loading: null,
+    load: async () => {
+      const mod = await import("./views/config.ts");
+      lazyRenderers.config.render = ((state: AppViewState) =>
+        mod.renderConfig({
+          raw: state.configRaw,
+          originalRaw: state.configRawOriginal,
+          rawMode: state.configRawMode,
+          rawPatch: state.configRawPatch,
+          rawPatchDirty: state.configRawPatchDirty,
+          valid: state.configValid,
+          issues: state.configIssues,
+          loading: state.configLoading,
+          saving: state.configSaving,
+          applying: state.configApplying,
+          patching: state.configPatching,
+          updating: state.updateRunning,
+          connected: state.connected,
+          schema: state.configSchema,
+          schemaLoading: state.configSchemaLoading,
+          uiHints: state.configUiHints,
+          formMode: state.configFormMode,
+          formValue: state.configForm,
+          originalValue: state.configFormOriginal,
+          searchQuery: state.configSearchQuery,
+          activeSection: state.configActiveSection,
+          activeSubsection: state.configActiveSubsection,
+          onRawChange: (next) => {
+            state.configRaw = next;
+          },
+          onRawModeChange: (mode) => {
+            state.configRawMode = mode;
+          },
+          onRawPatchChange: (next) => {
+            state.configRawPatch = next;
+            state.configRawPatchDirty = next.trim() !== "{}";
+          },
+          onRawReset: () => {
+            state.configRaw = state.configRawOriginal;
+          },
+          onRawPatchReset: () => {
+            state.configRawPatch = "{}\n";
+            state.configRawPatchDirty = false;
+          },
+          onFormModeChange: (mode) => {
+            state.configFormMode = mode;
+            if (mode === "form") {
+              syncConfigFormFromRaw(state);
+            }
+          },
+          onFormPatch: (path, value) => updateConfigFormValue(state, path, value),
+          onSearchChange: (query) => (state.configSearchQuery = query),
+          onSectionChange: (section) => {
+            state.configActiveSection = section;
+            state.configActiveSubsection = null;
+          },
+          onSubsectionChange: (section) => (state.configActiveSubsection = section),
+          onReload: () => loadConfig(state),
+          onSave: () => saveConfig(state),
+          onApply: () => applyConfig(state),
+          onPatchApply: () => patchConfig(state),
+          onUpdate: () => runUpdate(state),
+        })) as (state: AppViewState) => unknown;
+    },
+  },
+  debug: {
+    render: null,
+    loading: null,
+    load: async () => {
+      const mod = await import("./views/debug.ts");
+      lazyRenderers.debug.render = ((state: AppViewState) =>
+        mod.renderDebug({
+          loading: state.debugLoading,
+          status: state.debugStatus,
+          health: state.debugHealth,
+          models: state.debugModels,
+          heartbeat: state.debugHeartbeat,
+          eventLog: state.eventLog,
+          callMethod: state.debugCallMethod,
+          callParams: state.debugCallParams,
+          callResult: state.debugCallResult,
+          callError: state.debugCallError,
+          onCallMethodChange: (next) => (state.debugCallMethod = next),
+          onCallParamsChange: (next) => (state.debugCallParams = next),
+          onRefresh: () => loadDebug(state),
+          onCall: () => callDebugMethod(state),
+        })) as (state: AppViewState) => unknown;
+    },
+  },
+  logs: {
+    render: null,
+    loading: null,
+    load: async () => {
+      const mod = await import("./views/logs.ts");
+      lazyRenderers.logs.render = ((state: AppViewState) =>
+        mod.renderLogs({
+          loading: state.logsLoading,
+          error: state.logsError,
+          file: state.logsFile,
+          entries: state.logsEntries,
+          filterText: state.logsFilterText,
+          levelFilters: state.logsLevelFilters,
+          autoFollow: state.logsAutoFollow,
+          truncated: state.logsTruncated,
+          onFilterTextChange: (next) => (state.logsFilterText = next),
+          onLevelToggle: (level, enabled) => {
+            state.logsLevelFilters = { ...state.logsLevelFilters, [level]: enabled };
+          },
+          onToggleAutoFollow: (next) => (state.logsAutoFollow = next),
+          onRefresh: () => loadLogs(state, { reset: true }),
+          onExport: (lines, label) => state.exportLogs(lines, label),
+          onScroll: (event) => state.handleLogsScroll(event),
+        })) as (state: AppViewState) => unknown;
+    },
+  },
+};
+
+function renderLazyTab(key: LazyRenderKey, state: AppViewState, loadingLabel: string) {
+  const entry = lazyRenderers[key];
+  if (entry.render) {
+    return entry.render(state);
+  }
+  if (!entry.loading) {
+    entry.loading = entry
+      .load()
+      .catch((error) => {
+        state.lastError = `Failed to load ${key} tab: ${error instanceof Error ? error.message : String(error)}`;
+      })
+      .finally(() => {
+        entry.loading = null;
+        (state as unknown as { requestUpdate?: () => void }).requestUpdate?.();
+      });
+  }
+  return html`<div class="muted">${loadingLabel}…</div>`;
 }
 
 export function renderApp(state: AppViewState) {
@@ -435,7 +586,7 @@ export function renderApp(state: AppViewState) {
             : nothing
         }
 
-        ${renderUsageTab(state)}
+        ${renderLazyTab("usage", state, "Loading usage")}
 
         ${
           state.tab === "cron"
@@ -1011,29 +1162,43 @@ export function renderApp(state: AppViewState) {
                 sessions: state.sessionsResult,
                 sessionBadges: state.chatSessionBadges,
                 onAbortSession: (key) => void state.abortChatSession(key),
-                onRenameSession: (key, nextLabel) =>
-                  void patchSession(state, key, { label: nextLabel }),
+                onRenameSession: async (key, nextLabel) => {
+                  try {
+                    await patchSession(state, key, { label: nextLabel });
+                  } catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    state.lastError = `Failed to rename session: ${message}`;
+                    window.alert(`Failed to rename session: ${message}`);
+                  }
+                },
                 onDeleteSession: async (key, opts) => {
-                  const deleted = await deleteSessionAndRefresh(state, key, opts);
-                  if (!deleted) {
-                    return;
-                  }
+                  try {
+                    const deleted = await deleteSessionAndRefresh(state, key, opts);
+                    if (!deleted) {
+                      // If deleteSessionAndRefresh didn't throw but returned false, 
+                      // it means the user cancelled the operation
+                      return;
+                    }
 
-                  // Cleanup category assignment.
-                  const categories = { ...state.settings.chatSessionCategories };
-                  if (categories[key]) {
-                    delete categories[key];
-                    state.applySettings({
-                      ...state.settings,
-                      chatSessionCategories: categories,
-                    });
-                  }
+                    // Cleanup category assignment.
+                    const categories = { ...state.settings.chatSessionCategories };
+                    if (categories[key]) {
+                      delete categories[key];
+                      state.applySettings({
+                        ...state.settings,
+                        chatSessionCategories: categories,
+                      });
+                    }
 
-                  if (key === state.sessionKey) {
-                    const nextKey = state.sessionsResult?.sessions?.[0]?.key ?? "main";
-                    state.switchChatSession(nextKey);
-                    void loadChatHistory(state);
-                    void refreshChatAvatar(state);
+                    if (key === state.sessionKey) {
+                      const nextKey = state.sessionsResult?.sessions?.[0]?.key ?? "main";
+                      state.switchChatSession(nextKey);
+                      void loadChatHistory(state);
+                      void refreshChatAvatar(state);
+                    }
+                  } catch (error) {
+                    console.error("Error deleting session:", error);
+                    state.lastError = "Failed to delete session: " + (error instanceof Error ? error.message : String(error));
                   }
                 },
                 focusMode: chatFocus,
@@ -1116,114 +1281,11 @@ export function renderApp(state: AppViewState) {
             : nothing
         }
 
-        ${
-          state.tab === "config"
-            ? renderConfig({
-                raw: state.configRaw,
-                originalRaw: state.configRawOriginal,
-                rawMode: state.configRawMode,
-                rawPatch: state.configRawPatch,
-                rawPatchDirty: state.configRawPatchDirty,
-                valid: state.configValid,
-                issues: state.configIssues,
-                loading: state.configLoading,
-                saving: state.configSaving,
-                applying: state.configApplying,
-                patching: state.configPatching,
-                updating: state.updateRunning,
-                connected: state.connected,
-                schema: state.configSchema,
-                schemaLoading: state.configSchemaLoading,
-                uiHints: state.configUiHints,
-                formMode: state.configFormMode,
-                formValue: state.configForm,
-                originalValue: state.configFormOriginal,
-                searchQuery: state.configSearchQuery,
-                activeSection: state.configActiveSection,
-                activeSubsection: state.configActiveSubsection,
-                onRawChange: (next) => {
-                  state.configRaw = next;
-                },
-                onRawModeChange: (mode) => {
-                  state.configRawMode = mode;
-                },
-                onRawPatchChange: (next) => {
-                  state.configRawPatch = next;
-                  state.configRawPatchDirty = next.trim() !== "{}";
-                },
-                onRawReset: () => {
-                  state.configRaw = state.configRawOriginal;
-                },
-                onRawPatchReset: () => {
-                  state.configRawPatch = "{}\n";
-                  state.configRawPatchDirty = false;
-                },
-                onFormModeChange: (mode) => {
-                  state.configFormMode = mode;
-                  if (mode === "form") {
-                    // If the user edited Raw JSON5, try to reflect it back into the form model.
-                    syncConfigFormFromRaw(state);
-                  }
-                },
-                onFormPatch: (path, value) => updateConfigFormValue(state, path, value),
-                onSearchChange: (query) => (state.configSearchQuery = query),
-                onSectionChange: (section) => {
-                  state.configActiveSection = section;
-                  state.configActiveSubsection = null;
-                },
-                onSubsectionChange: (section) => (state.configActiveSubsection = section),
-                onReload: () => loadConfig(state),
-                onSave: () => saveConfig(state),
-                onApply: () => applyConfig(state),
-                onPatchApply: () => patchConfig(state),
-                onUpdate: () => runUpdate(state),
-              })
-            : nothing
-        }
+        ${state.tab === "config" ? renderLazyTab("config", state, "Loading config") : nothing}
 
-        ${
-          state.tab === "debug"
-            ? renderDebug({
-                loading: state.debugLoading,
-                status: state.debugStatus,
-                health: state.debugHealth,
-                models: state.debugModels,
-                heartbeat: state.debugHeartbeat,
-                eventLog: state.eventLog,
-                callMethod: state.debugCallMethod,
-                callParams: state.debugCallParams,
-                callResult: state.debugCallResult,
-                callError: state.debugCallError,
-                onCallMethodChange: (next) => (state.debugCallMethod = next),
-                onCallParamsChange: (next) => (state.debugCallParams = next),
-                onRefresh: () => loadDebug(state),
-                onCall: () => callDebugMethod(state),
-              })
-            : nothing
-        }
+        ${state.tab === "debug" ? renderLazyTab("debug", state, "Loading debug") : nothing}
 
-        ${
-          state.tab === "logs"
-            ? renderLogs({
-                loading: state.logsLoading,
-                error: state.logsError,
-                file: state.logsFile,
-                entries: state.logsEntries,
-                filterText: state.logsFilterText,
-                levelFilters: state.logsLevelFilters,
-                autoFollow: state.logsAutoFollow,
-                truncated: state.logsTruncated,
-                onFilterTextChange: (next) => (state.logsFilterText = next),
-                onLevelToggle: (level, enabled) => {
-                  state.logsLevelFilters = { ...state.logsLevelFilters, [level]: enabled };
-                },
-                onToggleAutoFollow: (next) => (state.logsAutoFollow = next),
-                onRefresh: () => loadLogs(state, { reset: true }),
-                onExport: (lines, label) => state.exportLogs(lines, label),
-                onScroll: (event) => state.handleLogsScroll(event),
-              })
-            : nothing
-        }
+        ${state.tab === "logs" ? renderLazyTab("logs", state, "Loading logs") : nothing}
       </main>
       ${renderExecApprovalPrompt(state)}
       ${renderGatewayUrlConfirmation(state)}
