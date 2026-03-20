@@ -182,6 +182,34 @@
   object-fit: contain;
 }
 
+.chat-attachment__file {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  text-align: center;
+}
+
+.chat-attachment__file svg {
+  width: 18px;
+  height: 18px;
+  opacity: 0.8;
+}
+
+.chat-attachment__fileName {
+  font-size: 10px;
+  line-height: 1.2;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+
 .chat-attachment__remove {
   position: absolute;
   top: 4px;

@@ -190,6 +190,38 @@ function generateAttachmentId(): string {
   return `att-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(reader.result as string));
+    reader.addEventListener("error", () => reject(reader.error ?? new Error("Failed to read file")));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function attachFiles(files: FileList | null, props: ChatProps) {
+  if (!files || !props.onAttachmentsChange) {
+    return;
+  }
+  const next: ChatAttachment[] = [];
+  for (const file of Array.from(files)) {
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      next.push({
+        id: generateAttachmentId(),
+        dataUrl,
+        mimeType: file.type || "application/octet-stream",
+        fileName: file.name || undefined,
+      });
+    } catch {
+      // ignore unreadable files
+    }
+  }
+  if (next.length > 0) {
+    props.onAttachmentsChange([...(props.attachments ?? []), ...next]);
+  }
+}
+
 function handlePaste(e: ClipboardEvent, props: ChatProps) {
   const items = e.clipboardData?.items;
   if (!items || !props.onAttachmentsChange) {
@@ -223,6 +255,7 @@ function handlePaste(e: ClipboardEvent, props: ChatProps) {
         id: generateAttachmentId(),
         dataUrl,
         mimeType: file.type,
+        fileName: file.name || undefined,
       };
       const current = props.attachments ?? [];
       props.onAttachmentsChange?.([...current, newAttachment]);
@@ -242,11 +275,20 @@ function renderAttachmentPreview(props: ChatProps) {
       ${attachments.map(
         (att) => html`
           <div class="chat-attachment">
-            <img
-              src=${att.dataUrl}
-              alt="Attachment preview"
-              class="chat-attachment__img"
-            />
+            ${att.mimeType.startsWith("image/")
+              ? html`
+                  <img
+                    src=${att.dataUrl}
+                    alt="Attachment preview"
+                    class="chat-attachment__img"
+                  />
+                `
+              : html`
+                  <div class="chat-attachment__file">
+                    ${icons.fileText}
+                    <span class="chat-attachment__fileName">${att.fileName || "Document"}</span>
+                  </div>
+                `}
             <button
               class="chat-attachment__remove"
               type="button"
@@ -280,7 +322,7 @@ export function renderChat(props: ChatProps) {
   const hasAttachments = (props.attachments?.length ?? 0) > 0;
   const composePlaceholder = props.connected
     ? hasAttachments
-      ? "Add a message or paste more images..."
+      ? "Add a message or attach more files..."
       : "Message (↩ to send, Shift+↩ for line breaks, paste images)"
     : "Connect to the gateway to start chatting…";
 
@@ -459,10 +501,35 @@ export function renderChat(props: ChatProps) {
                       <details
                         class="chat-sessions__menu"
                         @click=${(e: Event) => e.stopPropagation()}
+                        @focusout=${(e: FocusEvent) => {
+                          const el = e.currentTarget as HTMLDetailsElement;
+                          const next = e.relatedTarget as Node | null;
+                          if (!el.open) {
+                            return;
+                          }
+                          if (!next || !el.contains(next)) {
+                            el.removeAttribute("open");
+                          }
+                        }}
+                        @keydown=${(e: KeyboardEvent) => {
+                          if (e.key !== "Escape") {
+                            return;
+                          }
+                          const el = e.currentTarget as HTMLDetailsElement;
+                          el.removeAttribute("open");
+                        }}
                         @toggle=${(e: Event) => {
                           const el = e.currentTarget as HTMLDetailsElement;
                           if (!el.open) {
                             return;
+                          }
+                          // Close other open menus.
+                          for (const other of document.querySelectorAll<HTMLDetailsElement>(
+                            ".chat-sessions__menu[open]",
+                          )) {
+                            if (other !== el) {
+                              other.removeAttribute("open");
+                            }
                           }
                           // Position menu with fixed coords so it isn't clipped by overflow containers.
                           window.requestAnimationFrame(() => {
@@ -676,7 +743,7 @@ export function renderChat(props: ChatProps) {
                       <div class="chat-queue__text">
                         ${
                           item.text ||
-                          (item.attachments?.length ? `Image (${item.attachments.length})` : "")
+                          (item.attachments?.length ? `Attachment (${item.attachments.length})` : "")
                         }
                       </div>
                       <button
@@ -751,6 +818,42 @@ export function renderChat(props: ChatProps) {
             ></textarea>
           </label>
           <div class="chat-compose__actions">
+            <button
+              class="btn"
+              type="button"
+              ?disabled=${!props.connected}
+              title="Upload file"
+              @click=${() => {
+                const input = document.createElement("input");
+                input.type = "file";
+                input.accept = "image/*,.pdf,.txt,.md,.csv,.json,.doc,.docx,.xls,.xlsx,.ppt,.pptx";
+                input.multiple = true;
+                input.onchange = () => {
+                  void attachFiles(input.files, props);
+                };
+                input.click();
+              }}
+            >
+              ${icons.paperclip}
+            </button>
+            <button
+              class="btn"
+              type="button"
+              ?disabled=${!props.connected}
+              title="Take photo"
+              @click=${() => {
+                const input = document.createElement("input");
+                input.type = "file";
+                input.accept = "image/*";
+                input.setAttribute("capture", "environment");
+                input.onchange = () => {
+                  void attachFiles(input.files, props);
+                };
+                input.click();
+              }}
+            >
+              ${icons.image}
+            </button>
             ${
               canAbort
                 ? html`
