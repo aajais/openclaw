@@ -327,13 +327,37 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
+}
+
+.chat-controls .field {
+  display: block;
+  margin: 0;
+}
+
+.chat-controls__session,
+.chat-controls__model {
+  flex: 0 0 auto;
 }
 
 .chat-controls__session {
   min-width: 140px;
   max-width: 300px;
+  margin-right: 8px;
+}
+
+.chat-controls__model {
+  min-width: 220px;
+  max-width: 520px;
+}
+
+.chat-controls__hint {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+  padding-left: 6px;
 }
 
 .chat-controls__thinking {
@@ -418,12 +442,22 @@
   stroke-linejoin: round;
 }
 
-.chat-controls__session select {
+.chat-controls__session select,
+.chat-controls__model select {
   padding: 6px 10px;
   font-size: 13px;
-  max-width: 300px;
+  width: 100%;
+  max-width: none;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.chat-controls__session select {
+  min-width: 180px;
+}
+
+.chat-controls__model select {
+  min-width: 260px;
 }
 
 .chat-controls__thinking {
@@ -475,12 +509,30 @@
     width: 100%;
   }
 
+  /* Mobile: keep controls in a single scrollable row (matches Aj's request: visible on phone) */
   .chat-controls {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .chat-controls::-webkit-scrollbar {
+    display: none;
   }
 
   .chat-controls__session {
-    min-width: 120px;
+    min-width: 140px;
+    max-width: 220px;
+  }
+
+  .chat-controls__model {
+    min-width: 200px;
+    max-width: 260px;
+  }
+
+  .chat-controls__separator {
+    display: none;
   }
 }
