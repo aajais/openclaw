@@ -82,8 +82,13 @@ function rejectWebchatSessionMutation(params: {
   client: GatewayClient | null;
   isWebchatConnect: (params: GatewayClient["connect"] | null | undefined) => boolean;
   respond: RespondFn;
+  allow?: boolean;
+  message?: string;
 }): boolean {
   if (!params.client?.connect || !params.isWebchatConnect(params.client.connect)) {
+    return false;
+  }
+  if (params.allow) {
     return false;
   }
   params.respond(
@@ -91,10 +96,18 @@ function rejectWebchatSessionMutation(params: {
     undefined,
     errorShape(
       ErrorCodes.INVALID_REQUEST,
-      `webchat clients cannot ${params.action} sessions; use chat.send for session-scoped updates`,
+      params.message ??
+        `webchat clients cannot ${params.action} sessions; use chat.send for session-scoped updates`,
     ),
   );
   return true;
+}
+
+function isWebchatModelOnlySessionPatch(params: Record<string, unknown>): boolean {
+  if (!Object.hasOwn(params, "model")) {
+    return false;
+  }
+  return Object.keys(params).every((key) => key === "key" || key === "model");
 }
 
 function migrateAndPruneSessionStoreKey(params: {
@@ -381,7 +394,17 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     if (!key) {
       return;
     }
-    if (rejectWebchatSessionMutation({ action: "patch", client, isWebchatConnect, respond })) {
+    if (
+      rejectWebchatSessionMutation({
+        action: "patch",
+        client,
+        isWebchatConnect,
+        respond,
+        allow: isWebchatModelOnlySessionPatch(p),
+        message:
+          "webchat clients can only patch session model; other session mutations are blocked",
+      })
+    ) {
       return;
     }
 
@@ -508,7 +531,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     }
     respond(true, { ok: true, key: target.canonicalKey, entry: next }, undefined);
   },
-  "sessions.delete": async ({ params, respond, client, isWebchatConnect }) => {
+  "sessions.delete": async ({ params, respond }) => {
     if (!assertValidParams(params, validateSessionsDeleteParams, "sessions.delete", respond)) {
       return;
     }
@@ -517,10 +540,6 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     if (!key) {
       return;
     }
-    if (rejectWebchatSessionMutation({ action: "delete", client, isWebchatConnect, respond })) {
-      return;
-    }
-
     const { cfg, target, storePath } = resolveGatewaySessionTargetFromKey(key);
     const mainKey = resolveMainSessionKey(cfg);
     if (target.canonicalKey === mainKey) {

@@ -106,6 +106,7 @@ export async function deleteSession(
   if (state.sessionsLoading) {
     return false;
   }
+
   if (!opts?.skipConfirm) {
     const confirmed = window.confirm(
       `Delete session "${key}"?\n\nDeletes the session entry and archives its transcript.`,
@@ -114,6 +115,7 @@ export async function deleteSession(
       return false;
     }
   }
+
   state.sessionsLoading = true;
   state.sessionsError = null;
   try {
