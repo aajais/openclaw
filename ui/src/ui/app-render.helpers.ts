@@ -1,11 +1,12 @@
-import { html } from "lit";
+import { html, nothing } from "lit";
 import { repeat } from "lit/directives/repeat.js";
 import { t } from "../i18n/index.ts";
-import { refreshChat } from "./app-chat.ts";
+import { CHAT_SESSIONS_ACTIVE_MINUTES, refreshChat } from "./app-chat.ts";
 import { syncUrlWithSessionKey } from "./app-settings.ts";
 import type { AppViewState } from "./app-view-state.ts";
 import { OpenClawApp } from "./app.ts";
 import { ChatState, loadChatHistory } from "./controllers/chat.ts";
+import { loadSessions } from "./controllers/sessions.ts";
 import { icons } from "./icons.ts";
 import { iconForTab, pathForTab, titleForTab, type Tab } from "./navigation.ts";
 import type { ThemeTransitionContext } from "./theme-transition.ts";
@@ -32,20 +33,6 @@ function resolveSidebarChatSessionKey(state: AppViewState): string {
   return "main";
 }
 
-function resetChatStateForSessionSwitch(state: AppViewState, sessionKey: string) {
-  state.sessionKey = sessionKey;
-  state.chatMessage = "";
-  state.chatStream = null;
-  (state as unknown as OpenClawApp).chatStreamStartedAt = null;
-  state.chatRunId = null;
-  (state as unknown as OpenClawApp).resetToolStream();
-  (state as unknown as OpenClawApp).resetChatScroll();
-  state.applySettings({
-    ...state.settings,
-    sessionKey,
-    lastActiveSessionKey: sessionKey,
-  });
-}
 
 export function renderTab(state: AppViewState, tab: Tab) {
   const href = pathForTab(tab, state.basePath);
@@ -68,7 +55,7 @@ export function renderTab(state: AppViewState, tab: Tab) {
         if (tab === "chat") {
           const mainSessionKey = resolveSidebarChatSessionKey(state);
           if (state.sessionKey !== mainSessionKey) {
-            resetChatStateForSessionSwitch(state, mainSessionKey);
+            (state as unknown as OpenClawApp).switchChatSession(mainSessionKey);
             void state.loadAssistantIdentity();
           }
         }
@@ -82,6 +69,21 @@ export function renderTab(state: AppViewState, tab: Tab) {
   `;
 }
 
+export function resolveSessionModelRef(row?: SessionsListResult["sessions"][number] | null) {
+  if (!row) {
+    return "";
+  }
+  const model = typeof row.model === "string" ? row.model.trim() : "";
+  const provider = typeof row.modelProvider === "string" ? row.modelProvider.trim() : "";
+  if (model.includes("/")) {
+    return model;
+  }
+  if (provider && model) {
+    return `${provider}/${model}`;
+  }
+  return model;
+}
+
 export function renderChatControls(state: AppViewState) {
   const mainSessionKey = resolveMainSessionKey(state.hello, state.sessionsResult);
   const sessionOptions = resolveSessionOptions(
@@ -93,6 +95,22 @@ export function renderChatControls(state: AppViewState) {
   const disableFocusToggle = state.onboarding;
   const showThinking = state.onboarding ? false : state.settings.chatShowThinking;
   const focusActive = state.onboarding ? true : state.settings.chatFocusMode;
+
+  const activeSession = state.sessionsResult?.sessions?.find((row) => row.key === state.sessionKey);
+  const activeModelRef = resolveSessionModelRef(activeSession);
+  const modelOptions = Array.isArray(state.modelsCatalogIds) ? state.modelsCatalogIds : [];
+
+  const labelForModelId = (id: string): string => {
+    const trimmed = id.trim();
+    if (!trimmed) return trimmed;
+    const parts = trimmed.split("/");
+    if (parts.length <= 2) {
+      return trimmed;
+    }
+    // Collapse very deep provider/model ids (e.g. provider/org/model) into provider/model.
+    return `${parts[0]}/${parts.slice(-1)[0]}`;
+  };
+
   // Refresh icon
   const refreshIcon = html`
     <svg
@@ -166,6 +184,37 @@ export function renderChatControls(state: AppViewState) {
           )}
         </select>
       </label>
+
+      <label class="field chat-controls__model" title="Model (per chat session)">
+        <select
+          .value=${activeModelRef}
+          ?disabled=${!state.connected || state.modelsCatalogLoading}
+          aria-label="Model"
+          @change=${async (e: Event) => {
+            const next = (e.target as HTMLSelectElement).value.trim();
+            if (!next || !state.client || !state.connected) {
+              return;
+            }
+            try {
+              await state.client.request("sessions.patch", { key: state.sessionKey, model: next });
+              await loadSessions(state as unknown as Parameters<typeof loadSessions>[0], {
+                activeMinutes: CHAT_SESSIONS_ACTIVE_MINUTES,
+                limit: 0,
+              });
+            } catch (err) {
+              state.sessionsError = String(err);
+            }
+          }}
+        >
+          ${repeat(
+            modelOptions,
+            (id) => id,
+            (id) => html`<option value=${id} title=${id}>${labelForModelId(id)}</option>`,
+          )}
+        </select>
+        ${state.modelsCatalogLoading ? html`<span class="chat-controls__hint">Loading…</span>` : nothing}
+      </label>
+
       <button
         class="btn btn--sm btn--icon"
         ?disabled=${state.chatLoading || !state.connected}

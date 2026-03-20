@@ -429,12 +429,19 @@ export function renderChat(props: ChatProps) {
               });
               return ordered.map((key) => {
                 const row = rowsByKey.get(key);
-                const label = row?.label ? row.label : key;
+                const rowAny = row as (typeof row & { running?: boolean | null }) | undefined;
+                const label =
+                  (typeof row?.label === "string" && row.label.trim().length > 0
+                    ? row.label
+                    : typeof row?.displayName === "string" && row.displayName.trim().length > 0
+                      ? row.displayName
+                      : key);
                 const badge = badges[key];
+                const running = Boolean(badge?.running || rowAny?.running);
                 const category = row?.category ?? props.chatSessionCategories?.[key] ?? "other";
                 return html`
                   <div
-                    class="chat-sessions__item chat-sessions__item--cat-${category} ${key === props.sessionKey ? "chat-sessions__item--active" : ""}"
+                    class="chat-sessions__item chat-sessions__item--cat-${category} ${key === props.sessionKey ? "chat-sessions__item--active" : ""} ${running ? "chat-sessions__item--running" : ""}"
                     role="listitem"
                     title=${key}
                     tabindex="0"
@@ -565,7 +572,14 @@ export function renderChat(props: ChatProps) {
                               if (!confirmed) {
                                 return;
                               }
-                              props.onDeleteSession?.(key, { skipConfirm: true });
+                              // Call the delete function and handle any potential errors
+                              try {
+                                props.onDeleteSession?.(key, { skipConfirm: true });
+                              } catch (error) {
+                                console.error("Error deleting session:", error);
+                                // Optionally show an error message to the user
+                                alert("Failed to delete session: " + (error instanceof Error ? error.message : String(error)));
+                              }
                             }}
                           >
                             Delete
@@ -574,13 +588,10 @@ export function renderChat(props: ChatProps) {
                       </details>
 
                       ${(() => {
-                        const showStop =
-                          Boolean(props.onAbortSession) &&
-                          (key === props.sessionKey || badge?.running);
+                        const showStop = Boolean(props.onAbortSession) && (key === props.sessionKey || running);
                         if (!showStop) {
                           return nothing;
                         }
-                        const running = Boolean(badge?.running);
                         return html`
                           <button
                             type="button"

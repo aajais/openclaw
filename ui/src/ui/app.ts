@@ -300,6 +300,10 @@ export class OpenClawApp extends LitElement {
   @state() sessionsIncludeGlobal = true;
   @state() sessionsIncludeUnknown = false;
 
+  @state() modelsCatalogLoading = false;
+  @state() modelsCatalogError: string | null = null;
+  @state() modelsCatalogIds: string[] = [];
+
   @state() usageLoading = false;
   @state() usageResult: import("./types.js").SessionsUsageResult | null = null;
   @state() usageCostSummary: import("./types.js").CostUsageSummary | null = null;
@@ -854,13 +858,33 @@ export class OpenClawApp extends LitElement {
 
   updateChatBadges() {
     const badges: Record<string, { running: boolean; error: boolean }> = {};
+    const cachedRunIdFor = (key: string): string | null => {
+      const cached = loadChatSessionCache(key);
+      return typeof cached?.runId === "string" && cached.runId.trim().length > 0
+        ? cached.runId
+        : null;
+    };
+
     for (const [key, store] of this.chatSessions.entries()) {
-      const running = Boolean(store.chatRunId || store.chatSending);
+      const running = Boolean(store.chatRunId || store.chatSending || cachedRunIdFor(key));
       const error = Boolean(store.lastError);
       badges[key] = { running, error };
     }
+
+    // Include known backend sessions so running badges persist across new windows/tabs.
+    for (const row of this.sessionsResult?.sessions ?? []) {
+      const key = row.key;
+      if (badges[key]) {
+        continue;
+      }
+      badges[key] = {
+        running: Boolean(cachedRunIdFor(key)),
+        error: false,
+      };
+    }
+
     // Ensure the active session is always represented.
-    const activeRunning = Boolean(this.chatRunId || this.chatSending);
+    const activeRunning = Boolean(this.chatRunId || this.chatSending || cachedRunIdFor(this.sessionKey));
     badges[this.sessionKey] = { running: activeRunning, error: Boolean(this.lastError) };
     this.chatSessionBadges = badges;
   }

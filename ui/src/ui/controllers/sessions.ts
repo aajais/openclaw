@@ -49,6 +49,7 @@ export async function loadSessions(
     const res = await state.client.request<SessionsListResult | undefined>("sessions.list", params);
     if (res) {
       state.sessionsResult = res;
+      (state as unknown as { updateChatBadges?: () => void }).updateChatBadges?.();
     }
   } catch (err) {
     state.sessionsError = String(err);
