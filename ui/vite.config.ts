@@ -30,7 +30,9 @@ export default defineConfig(() => {
     build: {
       outDir: path.resolve(here, "../dist/control-ui"),
       emptyOutDir: true,
-      sourcemap: true,
+      // iOS Safari startup is sensitive to payload size/parse time.
+      // Keep source maps opt-in to reduce initial transfer + parse overhead in production builds.
+      sourcemap: process.env.OPENCLAW_CONTROL_UI_SOURCEMAP === "1",
       // Keep CI/onboard logs clean; current control UI chunking is intentionally above 500 kB.
       chunkSizeWarningLimit: 1024,
     },

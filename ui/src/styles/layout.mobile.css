@@ -135,6 +135,28 @@
     display: none;
   }
 
+  /* Mobile: keep chat controls visible */
+  .shell--chat .content-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 0 4px;
+  }
+
+  .shell--chat .page-meta {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Hide big page title/subtitle on mobile chat; keep only controls */
+  .shell--chat .content-header .page-title,
+  .shell--chat .content-header .page-sub {
+    display: none;
+  }
+
   .content {
     padding: 4px 4px 16px;
     gap: 12px;
@@ -272,6 +294,7 @@
     /* Make the header compact: New button is the primary control */
     gap: 8px;
     padding-right: 6px;
+    padding-top: max(2px, env(safe-area-inset-top, 0px));
 
     /* Ensure it visually sits above the scrolling pills */
     background: var(--card);
@@ -393,13 +416,28 @@
 
   .chat-compose {
     gap: 8px;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6px);
+  }
+
+  .chat-compose__row {
+    align-items: stretch;
   }
 
   .chat-compose__field textarea {
-    min-height: 60px;
-    padding: 8px 10px;
+    min-height: 56px;
+    padding: 10px 12px;
     border-radius: var(--radius-md);
     font-size: 16px; /* prevent iOS zoom-on-focus */
+    line-height: 1.35;
+  }
+
+  .chat-compose__actions {
+    gap: 6px;
+  }
+
+  .chat-compose__actions .btn {
+    min-height: 42px;
+    padding: 0 12px;
   }
 
   /* Log stream */
@@ -544,12 +582,23 @@
   .chat-compose__field textarea {
     min-height: 52px;
     padding: 8px 10px;
-    font-size: 13px;
+    font-size: 16px; /* keep iOS zoom disabled even on narrow screens */
   }
 
   .btn {
     padding: 6px 10px;
     font-size: 11px;
+  }
+
+  @supports (-webkit-touch-callout: none) {
+    /* iPhone polish: reduce paint-heavy effects for smoother scrolling/startup. */
+    .card,
+    .chat-sessions,
+    .chat-compose,
+    .topbar {
+      box-shadow: none;
+      backdrop-filter: none;
+    }
   }
 
   .topbar-status .pill {
