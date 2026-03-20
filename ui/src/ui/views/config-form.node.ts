@@ -322,6 +322,52 @@ function renderTags(tags: string[]): TemplateResult | typeof nothing {
   `;
 }
 
+function renderUnsupportedJsonField(params: {
+  label: string;
+  help?: string;
+  tags: string[];
+  value: unknown;
+  path: Array<string | number>;
+  disabled: boolean;
+  onPatch: (path: Array<string | number>, value: unknown) => void;
+  message?: string;
+}): TemplateResult {
+  const fallback = (() => {
+    try {
+      return JSON.stringify(params.value ?? null, null, 2);
+    } catch {
+      return "null";
+    }
+  })();
+  return html`
+    <div class="cfg-field cfg-field--error">
+      <div class="cfg-field__label">${params.label}</div>
+      ${params.help ? html`<div class="cfg-field__help">${params.help}</div>` : nothing}
+      ${renderTags(params.tags)}
+      <div class="cfg-field__error">${params.message ?? "Unsupported schema node"}. Editing as JSON.</div>
+      <textarea
+        class="cfg-textarea cfg-textarea--sm"
+        rows="4"
+        .value=${fallback}
+        ?disabled=${params.disabled}
+        @change=${(e: Event) => {
+          const target = e.target as HTMLTextAreaElement;
+          const raw = target.value.trim();
+          if (!raw) {
+            params.onPatch(params.path, undefined);
+            return;
+          }
+          try {
+            params.onPatch(params.path, JSON.parse(raw));
+          } catch {
+            target.value = fallback;
+          }
+        }}
+      ></textarea>
+    </div>
+  `;
+}
+
 export function renderNode(params: {
   schema: JsonSchema;
   value: unknown;
@@ -344,10 +390,7 @@ export function renderNode(params: {
   const toggleConfiguredClass = configured ? " cfg-toggle-row--configured" : "";
 
   if (unsupported.has(key)) {
-    return html`<div class="cfg-field cfg-field--error">
-      <div class="cfg-field__label">${label}</div>
-      <div class="cfg-field__error">Unsupported schema node. Use Raw mode.</div>
-    </div>`;
+    return renderUnsupportedJsonField({ label, help, tags, value, path, disabled, onPatch });
   }
   if (
     criteria &&
@@ -524,12 +567,16 @@ export function renderNode(params: {
   }
 
   // Fallback
-  return html`
-    <div class="cfg-field cfg-field--error">
-      <div class="cfg-field__label">${label}</div>
-      <div class="cfg-field__error">Unsupported type: ${type}. Use Raw mode.</div>
-    </div>
-  `;
+  return renderUnsupportedJsonField({
+    label,
+    help,
+    tags,
+    value,
+    path,
+    disabled,
+    onPatch,
+    message: `Unsupported type: ${type}`,
+  });
 }
 
 function renderTextInput(params: {
@@ -840,12 +887,16 @@ function renderArray(params: {
 
   const itemsSchema = Array.isArray(schema.items) ? schema.items[0] : schema.items;
   if (!itemsSchema) {
-    return html`
-      <div class="cfg-field cfg-field--error">
-        <div class="cfg-field__label">${label}</div>
-        <div class="cfg-field__error">Unsupported array schema. Use Raw mode.</div>
-      </div>
-    `;
+    return renderUnsupportedJsonField({
+      label,
+      help,
+      tags,
+      value,
+      path,
+      disabled,
+      onPatch,
+      message: "Unsupported array schema",
+    });
   }
 
   const arr = Array.isArray(value) ? value : Array.isArray(schema.default) ? schema.default : [];

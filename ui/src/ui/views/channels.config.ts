@@ -114,7 +114,7 @@ export function renderChannelConfigForm(props: ChannelConfigFormProps) {
   const node = resolveSchemaNode(normalized, ["channels", props.channelId]);
   if (!node) {
     return html`
-      <div class="callout danger">Channel config schema unavailable.</div>
+      <div class="callout">No editable schema for this channel (status-only).</div>
     `;
   }
   const configValue = props.configValue ?? {};
