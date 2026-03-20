@@ -148,7 +148,7 @@ describe("gateway sessions handler", () => {
     });
   });
 
-  it("allows webchat to patch only the session model", async () => {
+  it("allows webchat to patch session model", async () => {
     const respond = await invokeSessionsPatch(
       {
         key: "agent:main:main",
@@ -184,11 +184,46 @@ describe("gateway sessions handler", () => {
     );
   });
 
-  it("still blocks non-model session patch fields for webchat", async () => {
+  it("allows webchat to patch session label", async () => {
     const respond = await invokeSessionsPatch(
       {
         key: "agent:main:main",
-        label: "should-fail",
+        label: "spotify vibe router",
+      },
+      {
+        client: {
+          connect: {
+            minProtocol: 1,
+            maxProtocol: 1,
+            client: {
+              id: "openclaw-control-ui",
+              version: "dev",
+              platform: "web",
+              mode: "webchat",
+            },
+          },
+        },
+        isWebchatConnect: () => true,
+      },
+    );
+
+    expect(mocks.updateSessionStore).toHaveBeenCalledOnce();
+    expect(mocks.applySessionsPatchToStore).toHaveBeenCalledOnce();
+    expect(respond).toHaveBeenCalledWith(
+      true,
+      expect.objectContaining({
+        ok: true,
+        key: "agent:main:main",
+      }),
+      undefined,
+    );
+  });
+
+  it("still blocks non-model/non-label session patch fields for webchat", async () => {
+    const respond = await invokeSessionsPatch(
+      {
+        key: "agent:main:main",
+        thinkingLevel: "high",
       },
       {
         client: {
@@ -214,7 +249,7 @@ describe("gateway sessions handler", () => {
       undefined,
       expect.objectContaining({
         code: "INVALID_REQUEST",
-        message: expect.stringMatching(/only patch session model/i),
+        message: expect.stringMatching(/only patch session model or label/i),
       }),
     );
   });

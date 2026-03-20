@@ -103,11 +103,16 @@ function rejectWebchatSessionMutation(params: {
   return true;
 }
 
-function isWebchatModelOnlySessionPatch(params: Record<string, unknown>): boolean {
-  if (!Object.hasOwn(params, "model")) {
+function isWebchatAllowedSessionPatch(params: Record<string, unknown>): boolean {
+  const keys = Object.keys(params);
+  if (keys.length === 0 || !keys.includes("key")) {
     return false;
   }
-  return Object.keys(params).every((key) => key === "key" || key === "model");
+  const allowed = new Set(["key", "model", "label"]);
+  if (!keys.every((key) => allowed.has(key))) {
+    return false;
+  }
+  return keys.includes("model") || keys.includes("label");
 }
 
 function migrateAndPruneSessionStoreKey(params: {
@@ -400,9 +405,9 @@ export const sessionsHandlers: GatewayRequestHandlers = {
         client,
         isWebchatConnect,
         respond,
-        allow: isWebchatModelOnlySessionPatch(p),
+        allow: isWebchatAllowedSessionPatch(p),
         message:
-          "webchat clients can only patch session model; other session mutations are blocked",
+          "webchat clients can only patch session model or label; other session mutations are blocked",
       })
     ) {
       return;
