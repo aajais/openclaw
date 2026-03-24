@@ -4,6 +4,7 @@ import { setLastActiveSessionKey } from "./app-settings.ts";
 import { resetToolStream } from "./app-tool-stream.ts";
 import { abortChatRun, loadChatHistory, sendChatMessage } from "./controllers/chat.ts";
 import { loadSessions } from "./controllers/sessions.ts";
+import { loadModelsCatalog } from "./controllers/models.ts";
 import type { GatewayHelloOk } from "./gateway.ts";
 import { normalizeBasePath } from "./navigation.ts";
 import type { ChatAttachment, ChatQueueItem } from "./ui-types.ts";
@@ -21,6 +22,11 @@ export type ChatHost = {
   hello: GatewayHelloOk | null;
   chatAvatarUrl: string | null;
   refreshSessionsAfterChat: Set<string>;
+  // Shared catalog
+  modelsCatalogLoading?: boolean;
+  modelsCatalogError?: string | null;
+  modelsCatalogIds?: string[];
+  client?: import("./gateway.ts").GatewayBrowserClient | null;
 };
 
 // Chat sidebar should show all sessions (running or not). Keep filters for the Sessions tab.
@@ -54,10 +60,22 @@ function isChatResetCommand(text: string) {
     return false;
   }
   const normalized = trimmed.toLowerCase();
-  if (normalized === "/new" || normalized === "/reset") {
+  if (normalized === "/new" || normalized === "/reset" || normalized === "/delete") {
     return true;
   }
-  return normalized.startsWith("/new ") || normalized.startsWith("/reset ");
+  return normalized.startsWith("/new ") || normalized.startsWith("/reset ") || normalized.startsWith("/delete ");
+}
+
+function isChatDeleteCommand(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+  const normalized = trimmed.toLowerCase();
+  if (normalized === "/delete") {
+    return true;
+  }
+  return normalized.startsWith("/delete ");
 }
 
 export async function handleAbortChat(host: ChatHost) {
@@ -213,6 +231,7 @@ export async function refreshChat(host: ChatHost, opts?: { scheduleScroll?: bool
       activeMinutes: CHAT_SESSIONS_ACTIVE_MINUTES,
       limit: 0,
     }),
+    loadModelsCatalog(host as unknown as Parameters<typeof loadModelsCatalog>[0]),
     refreshChatAvatar(host),
   ]);
   if (opts?.scheduleScroll !== false) {

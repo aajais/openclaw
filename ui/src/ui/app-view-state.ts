@@ -164,6 +164,9 @@ export type AppViewState = {
   sessionsFilterLimit: string;
   sessionsIncludeGlobal: boolean;
   sessionsIncludeUnknown: boolean;
+  modelsCatalogLoading: boolean;
+  modelsCatalogError: string | null;
+  modelsCatalogIds: string[];
   usageLoading: boolean;
   usageResult: SessionsUsageResult | null;
   usageCostSummary: CostUsageSummary | null;

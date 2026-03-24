@@ -507,6 +507,15 @@ export function renderChat(props: ChatProps) {
                           if (!el.open) {
                             return;
                           }
+                          // iOS/Safari touch focus can blur details immediately after tap,
+                          // which makes the menu appear to never open. Keep focusout-close
+                          // only for fine-pointer (desktop) environments.
+                          const isFinePointer =
+                            typeof window !== "undefined" &&
+                            window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+                          if (!isFinePointer) {
+                            return;
+                          }
                           if (!next || !el.contains(next)) {
                             el.removeAttribute("open");
                           }

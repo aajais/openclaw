@@ -93,6 +93,7 @@ export async function patchSession(
     await loadSessions(state);
   } catch (err) {
     state.sessionsError = String(err);
+    throw err;
   }
 }
 

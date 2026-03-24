@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import * as weave from "weave";
+import { derivePromptTokens, normalizeUsage, type UsageLike } from "../agents/usage.js";
 
 let weaveInitPromise: Promise<void> | null = null;
 let weaveDisabledReason: string | null = null;
@@ -273,6 +274,96 @@ function summarizeTurnResult(result: unknown): Record<string, unknown> {
   };
 }
 
+function extractWeaveUsageCost(usageRaw: unknown): {
+  prompt_tokens_total_cost?: number;
+  completion_tokens_total_cost?: number;
+  total_cost?: number;
+} | null {
+  if (!usageRaw || typeof usageRaw !== "object") {
+    return null;
+  }
+  const record = usageRaw as Record<string, unknown>;
+  const cost =
+    record.cost && typeof record.cost === "object"
+      ? (record.cost as Record<string, unknown>)
+      : undefined;
+  if (!cost) {
+    return null;
+  }
+
+  const input = typeof cost.input === "number" && Number.isFinite(cost.input) ? cost.input : 0;
+  const cacheRead =
+    typeof cost.cacheRead === "number" && Number.isFinite(cost.cacheRead) ? cost.cacheRead : 0;
+  const cacheWrite =
+    typeof cost.cacheWrite === "number" && Number.isFinite(cost.cacheWrite) ? cost.cacheWrite : 0;
+  const output = typeof cost.output === "number" && Number.isFinite(cost.output) ? cost.output : 0;
+  const total =
+    typeof cost.total === "number" && Number.isFinite(cost.total) ? cost.total : undefined;
+  const promptTotal = input + cacheRead + cacheWrite;
+  const roundCost = (value: number): number => Number(value.toFixed(12));
+
+  if (!(promptTotal > 0) && !(output > 0) && !(typeof total === "number" && total >= 0)) {
+    return null;
+  }
+
+  return {
+    ...(promptTotal > 0 ? { prompt_tokens_total_cost: roundCost(promptTotal) } : {}),
+    ...(output > 0 ? { completion_tokens_total_cost: roundCost(output) } : {}),
+    ...(typeof total === "number" && total >= 0 ? { total_cost: roundCost(total) } : {}),
+  };
+}
+
+export function summarizeOpenclawLlmResult(result: unknown): Record<string, unknown> {
+  if (!result || typeof result !== "object") {
+    return {};
+  }
+
+  const record = result as Record<string, unknown>;
+  const usage = normalizeUsage((record.usage as UsageLike | undefined) ?? undefined);
+  const model =
+    typeof record.model === "string" && record.model.trim()
+      ? record.model.trim()
+      : typeof record.provider === "string" && record.provider.trim()
+        ? record.provider.trim()
+        : "";
+
+  if (!usage || !model) {
+    return {};
+  }
+
+  const totalTokens =
+    usage.total ??
+    (usage.input ?? 0) + (usage.output ?? 0) + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
+  const promptTokens = derivePromptTokens({
+    input: usage.input,
+    cacheRead: usage.cacheRead,
+    cacheWrite: usage.cacheWrite,
+  });
+  const cost = extractWeaveUsageCost(record.usage);
+
+  return {
+    usage: {
+      [model]: {
+        ...(promptTokens !== undefined ? { prompt_tokens: promptTokens } : {}),
+        ...(usage.output !== undefined ? { completion_tokens: usage.output } : {}),
+        ...(usage.input !== undefined ? { input_tokens: usage.input } : {}),
+        ...(usage.output !== undefined ? { output_tokens: usage.output } : {}),
+        ...(totalTokens > 0 ? { total_tokens: totalTokens } : {}),
+        ...(usage.cacheRead !== undefined
+          ? { prompt_tokens_details: { cached_tokens: usage.cacheRead } }
+          : {}),
+        ...(usage.cacheRead !== undefined
+          ? { cache_read_input_tokens: usage.cacheRead }
+          : {}),
+        ...(usage.cacheWrite !== undefined
+          ? { cache_creation_input_tokens: usage.cacheWrite }
+          : {}),
+        ...(cost ?? {}),
+      },
+    },
+  };
+}
+
 const rawOpenclawTurnOp = weave.op(async function openclaw_turn(args: {
   sessionKey: string;
   runId: string;
@@ -284,22 +375,32 @@ const rawOpenclawTurnOp = weave.op(async function openclaw_turn(args: {
   return summarizeTurnResult(result);
 });
 
-const rawOpenclawLlmOp = weave.op(async function openclaw_llm(args: {
-  sessionKey: string;
-  runId: string;
-  systemPrompt?: string;
-  prompt?: string;
-  outputText?: string;
-  reasoningSummary?: string;
-  usage?: unknown;
-}) {
-  // This is a pure logging op. Return outputText for visibility.
-  return {
-    assistant_output: args.outputText,
-    reasoning_summary: args.reasoningSummary,
-    usage: args.usage,
-  };
-});
+const rawOpenclawLlmOp = weave.op(
+  async function openclaw_llm(args: {
+    sessionKey: string;
+    runId: string;
+    provider?: string;
+    model?: string;
+    systemPrompt?: string;
+    prompt?: string;
+    outputText?: string;
+    reasoningSummary?: string;
+    usage?: unknown;
+  }) {
+    // Keep the raw payload visible while summarize() emits token metadata to Weave's summary path.
+    return {
+      provider: args.provider,
+      model: args.model,
+      assistant_output: args.outputText,
+      reasoning_summary: args.reasoningSummary,
+      usage: args.usage,
+    };
+  },
+  {
+    opKind: "llm",
+    summarize: summarizeOpenclawLlmResult,
+  },
+);
 
 const rawOpenclawToolOp = weave.op(async function openclaw_tool(args: {
   sessionKey: string;
@@ -329,6 +430,8 @@ export async function openclawTurnOp(args: {
 export async function openclawLlmOp(args: {
   sessionKey: string;
   runId: string;
+  provider?: string;
+  model?: string;
   systemPrompt?: string;
   prompt?: string;
   outputText?: string;

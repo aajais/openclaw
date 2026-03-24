@@ -29,9 +29,15 @@ describe("chat mobile layout", () => {
     expect(menuTrigger).not.toBeNull();
     if (menuTrigger) {
       const r = menuTrigger.getBoundingClientRect();
-      // Visual size can be smaller than the tap target; the container adds padding.
-      expect(r.width).toBeGreaterThanOrEqual(16);
-      expect(r.height).toBeGreaterThanOrEqual(16);
+      expect(r.width).toBeGreaterThanOrEqual(24);
+      expect(r.height).toBeGreaterThanOrEqual(24);
+    }
+
+    const actions = app.querySelector<HTMLElement>(".chat-sessions__actions");
+    expect(actions).not.toBeNull();
+    if (actions) {
+      expect(getComputedStyle(actions).opacity).toBe("1");
+      expect(getComputedStyle(actions).pointerEvents).toBe("auto");
     }
   });
 });

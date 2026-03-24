@@ -293,6 +293,8 @@ export function handleMessageEnd(
       kind: "llm",
       sessionKey: ctx.params.sessionKey,
       runId: ctx.params.runId,
+      provider: typeof assistantMessage.provider === "string" ? assistantMessage.provider : undefined,
+      model: typeof assistantMessage.model === "string" ? assistantMessage.model : undefined,
       prompt: includePrompts ? ctx.params.turnPrompt : undefined,
       outputText: rawText,
       reasoningSummary: includeReasoningSummary ? formattedReasoning : undefined,

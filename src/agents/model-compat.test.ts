@@ -90,6 +90,27 @@ describe("normalizeModelCompat — Anthropic baseUrl", () => {
     expect(normalized.baseUrl).toBe("https://api.openai.com/v1");
   });
 
+  it("strips /chat/completions from openai-completions baseUrl", () => {
+    const model = {
+      ...baseModel(),
+      provider: "wandb",
+      baseUrl: "https://api.inference.wandb.ai/v1/chat/completions",
+    };
+    const normalized = normalizeModelCompat(model);
+    expect(normalized.baseUrl).toBe("https://api.inference.wandb.ai/v1");
+  });
+
+  it("strips /responses from openai-responses baseUrl", () => {
+    const model = {
+      ...baseModel(),
+      provider: "custom-responses",
+      api: "openai-responses" as Api,
+      baseUrl: "https://proxy.example.com/v1/responses",
+    };
+    const normalized = normalizeModelCompat(model);
+    expect(normalized.baseUrl).toBe("https://proxy.example.com/v1");
+  });
+
   it("strips /v1 from custom Anthropic proxy baseUrl", () => {
     const model = {
       ...anthropicBase(),
@@ -160,6 +181,50 @@ describe("normalizeModelCompat", () => {
     expect(
       (normalized.compat as { supportsDeveloperRole?: boolean } | undefined)?.supportsDeveloperRole,
     ).toBe(false);
+  });
+
+  it("applies W&B proxy defaults for openai-compatible models", () => {
+    const model = {
+      ...baseModel(),
+      provider: "wandb",
+      baseUrl: "https://api.inference.wandb.ai/v1",
+    };
+    delete (model as { compat?: unknown }).compat;
+    const normalized = normalizeModelCompat(model);
+    const compat = normalized.compat as
+      | {
+          supportsDeveloperRole?: boolean;
+          supportsReasoningEffort?: boolean;
+          maxTokensField?: string;
+        }
+      | undefined;
+    expect(compat?.supportsDeveloperRole).toBe(false);
+    expect(compat?.supportsReasoningEffort).toBe(false);
+    expect(compat?.maxTokensField).toBe("max_tokens");
+  });
+
+  it("does not override explicit W&B compat overrides", () => {
+    const model = {
+      ...baseModel(),
+      provider: "wandb",
+      baseUrl: "https://api.inference.wandb.ai/v1",
+      compat: {
+        supportsDeveloperRole: true,
+        supportsReasoningEffort: true,
+        maxTokensField: "max_completion_tokens",
+      },
+    };
+    const normalized = normalizeModelCompat(model);
+    const compat = normalized.compat as
+      | {
+          supportsDeveloperRole?: boolean;
+          supportsReasoningEffort?: boolean;
+          maxTokensField?: string;
+        }
+      | undefined;
+    expect(compat?.supportsDeveloperRole).toBe(true);
+    expect(compat?.supportsReasoningEffort).toBe(true);
+    expect(compat?.maxTokensField).toBe("max_completion_tokens");
   });
 
   it("leaves non-zai models untouched", () => {

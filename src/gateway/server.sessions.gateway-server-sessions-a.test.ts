@@ -1188,7 +1188,7 @@ describe("gateway server sessions", () => {
     ws.close();
   });
 
-  test("webchat clients cannot patch or delete sessions", async () => {
+  test("webchat clients can patch session model but cannot mutate other session fields", async () => {
     await createSessionStoreDir();
 
     await writeSessionStore({
@@ -1203,6 +1203,8 @@ describe("gateway server sessions", () => {
         },
       },
     });
+    piSdkMock.enabled = true;
+    piSdkMock.models = [{ id: "gpt-test-a", name: "A", provider: "openai" }];
 
     const ws = new WebSocket(`ws://127.0.0.1:${harness.port}`, {
       headers: { origin: `http://127.0.0.1:${harness.port}` },
@@ -1219,12 +1221,25 @@ describe("gateway server sessions", () => {
       scopes: ["operator.admin"],
     });
 
+    const modelPatched = await rpcReq<{
+      entry?: { modelOverride?: string; providerOverride?: string };
+      resolved?: { modelProvider?: string; model?: string };
+    }>(ws, "sessions.patch", {
+      key: "agent:main:discord:group:dev",
+      model: "openai/gpt-test-a",
+    });
+    expect(modelPatched.ok).toBe(true);
+    expect(modelPatched.payload?.entry?.modelOverride).toBe("gpt-test-a");
+    expect(modelPatched.payload?.entry?.providerOverride).toBe("openai");
+    expect(modelPatched.payload?.resolved?.modelProvider).toBe("openai");
+    expect(modelPatched.payload?.resolved?.model).toBe("gpt-test-a");
+
     const patched = await rpcReq(ws, "sessions.patch", {
       key: "agent:main:discord:group:dev",
       label: "should-fail",
     });
     expect(patched.ok).toBe(false);
-    expect(patched.error?.message ?? "").toMatch(/webchat clients cannot patch sessions/i);
+    expect(patched.error?.message ?? "").toMatch(/only patch session model/i);
 
     const deleted = await rpcReq(ws, "sessions.delete", {
       key: "agent:main:discord:group:dev",

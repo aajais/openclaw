@@ -54,6 +54,7 @@ import { sessionsHandlers } from "./sessions.js";
 import type { GatewayRequestHandlerOptions, GatewayRequestHandlers } from "./types.js";
 
 const RESET_COMMAND_RE = /^\/(new|reset)(?:\s+([\s\S]*))?$/i;
+const DELETE_COMMAND_RE = /^\/delete(?:\s+([\s\S]*))?$/i;
 
 function isGatewayErrorShape(value: unknown): value is { code: string; message: string } {
   if (!value || typeof value !== "object") {
@@ -139,6 +140,84 @@ async function runSessionResetFromAgent(params: {
             error: errorShape(
               ErrorCodes.UNAVAILABLE,
               "sessions.reset completed without returning a response",
+            ),
+          });
+        }
+      } catch (err: unknown) {
+        settle({
+          ok: false,
+          error: errorShape(ErrorCodes.UNAVAILABLE, String(err)),
+        });
+      }
+    })();
+  });
+}
+
+async function runSessionDeleteFromAgent(params: {
+  key: string;
+  idempotencyKey: string;
+  context: GatewayRequestHandlerOptions["context"];
+  client: GatewayRequestHandlerOptions["client"];
+  isWebchatConnect: GatewayRequestHandlerOptions["isWebchatConnect"];
+}): Promise<
+  | { ok: true; key: string }
+  | { ok: false; error: ReturnType<typeof errorShape> }
+> {
+  return await new Promise((resolve) => {
+    let settled = false;
+    const settle = (
+      result:
+        | { ok: true; key: string }
+        | { ok: false; error: ReturnType<typeof errorShape> },
+    ) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(result);
+    };
+
+    const respond: GatewayRequestHandlerOptions["respond"] = (ok, payload, error) => {
+      if (!ok) {
+        settle({
+          ok: false,
+          error: isGatewayErrorShape(error)
+            ? error
+            : errorShape(ErrorCodes.UNAVAILABLE, String(error ?? "sessions.delete failed")),
+        });
+        return;
+      }
+
+      const payloadObj = payload as { key?: unknown } | undefined;
+      const key = typeof payloadObj?.key === "string" ? payloadObj.key : params.key;
+      settle({ ok: true, key });
+    };
+
+    const deleteResult = sessionsHandlers["sessions.delete"]({
+      req: {
+        type: "req",
+        id: `${params.idempotencyKey}:delete`,
+        method: "sessions.delete",
+      },
+      params: {
+        key: params.key,
+        deleteTranscript: true,
+      },
+      context: params.context,
+      client: params.client,
+      isWebchatConnect: params.isWebchatConnect,
+      respond,
+    });
+
+    void (async () => {
+      try {
+        await deleteResult;
+        if (!settled) {
+          settle({
+            ok: false,
+            error: errorShape(
+              ErrorCodes.UNAVAILABLE,
+              "sessions.delete completed without returning a response",
             ),
           });
         }
@@ -345,6 +424,28 @@ export const agentHandlers: GatewayRequestHandlers = {
         message = BARE_SESSION_RESET_PROMPT;
         skipTimestampInjection = true;
       }
+    }
+
+    const deleteCommandMatch = message.match(DELETE_COMMAND_RE);
+    if (deleteCommandMatch && requestedSessionKey) {
+      const deleteResult = await runSessionDeleteFromAgent({
+        key: requestedSessionKey,
+        idempotencyKey: idem,
+        context,
+        client,
+        isWebchatConnect,
+      });
+      if (!deleteResult.ok) {
+        respond(false, undefined, deleteResult.error);
+        return;
+      }
+      // After successful deletion, we should not continue processing the message
+      // Return a success response
+      respond(true, { 
+        key: deleteResult.key,
+        message: "Session deleted successfully"
+      });
+      return;
     }
 
     // Inject timestamp into user-authored messages that don't already have one.

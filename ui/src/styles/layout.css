@@ -454,14 +454,14 @@
   justify-content: space-between;
   gap: 16px;
   padding: 4px 8px;
-  overflow: hidden;
+  overflow: visible;
   transform-origin: top center;
   transition:
     opacity var(--shell-focus-duration) var(--shell-focus-ease),
     transform var(--shell-focus-duration) var(--shell-focus-ease),
     max-height var(--shell-focus-duration) var(--shell-focus-ease),
     padding var(--shell-focus-duration) var(--shell-focus-ease);
-  max-height: 80px;
+  max-height: 160px;
 }
 
 .shell--chat-focus .content-header {
@@ -496,13 +496,15 @@
 /* Chat view header adjustments */
 .content--chat .content-header {
   flex-direction: row;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 }
 
 .content--chat .content-header > div:first-child {
   text-align: left;
+  flex: 0 1 auto;
 }
 
 .content--chat .page-meta {
@@ -510,7 +512,8 @@
 }
 
 .content--chat .chat-controls {
-  flex-shrink: 0;
+  flex: 1 1 680px;
+  min-width: 0;
 }
 
 /* ===========================================

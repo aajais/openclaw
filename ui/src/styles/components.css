@@ -1816,6 +1816,26 @@
   pointer-events: auto;
 }
 
+/* Touch devices: no hover affordance, so keep actions visible + tappable. */
+@media (hover: none), (pointer: coarse) {
+  .chat-sessions__actions {
+    opacity: 1;
+    pointer-events: auto;
+    right: 6px;
+    top: 4px;
+    bottom: 4px;
+    padding: 4px;
+  }
+
+  .chat-sessions__menuTrigger,
+  .chat-sessions__stop {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+  }
+}
+
 /* Session row menu */
 .chat-sessions__menu {
   position: relative;

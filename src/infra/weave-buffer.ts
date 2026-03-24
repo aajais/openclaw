@@ -2,6 +2,8 @@ type WeaveLlmEvent = {
   kind: "llm";
   sessionKey: string;
   runId: string;
+  provider?: string;
+  model?: string;
   systemPrompt?: string;
   prompt?: string;
   outputText?: string;
